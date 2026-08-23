@@ -5,7 +5,6 @@
 // ==========================================
 const fs = require('fs');
 const path = require('path');
-const { run } = require('@grammyjs/runner');
 const { initBotWithFallback } = require('./connection');
 
 // خواندن تنظیمات از فایل JSON
@@ -80,7 +79,7 @@ function buildKeyboard(menuNode, isRoot = false) {
 
         const options = buildKeyboard(config.menu, true);
 
-        // ارسال تصویر خوش‌آمدگویی از طریق ctx.api.sendPhoto جهت جلوگیری از خطای متد روی ctx
+        // ارسال تصویر خوش‌آمدگویی از طریق API مستقیم
         if (config.start && config.start.file_id) {
             await ctx.api.sendPhoto(ctx.chat.id, config.start.file_id, {
                 caption: config.start.caption || '',
@@ -151,7 +150,8 @@ function buildKeyboard(menuNode, isRoot = false) {
         console.error('Bot Runtime Error:', err.message);
     });
 
-    // شروع دریافت پیام‌ها و زنده نگه داشتن پروسه
-    run(bot);
     console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
+
+    // زنده نگه داشتن پروسه Node.js برای PM2 بدون تداخل در دریافت پیام‌ها
+    setInterval(() => {}, 1000 * 60 * 60);
 })();
