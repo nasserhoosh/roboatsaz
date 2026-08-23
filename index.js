@@ -5,6 +5,7 @@
 // ==========================================
 const fs = require('fs');
 const path = require('path');
+const { run } = require('@grammyjs/runner');
 const { initBotWithFallback } = require('./connection');
 
 // خواندن تنظیمات از فایل JSON
@@ -31,7 +32,7 @@ function getCurrentMenuNode(pathArray) {
     return current;
 }
 
-// ساخت ساختار ReplyKeyboard بر اساس لایه‌بندی JSON
+// ساخت ساختار ReplyKeyboard بر اساس لایه‌بندی JSON برای grammY
 function buildKeyboard(menuNode, isRoot = false) {
     const keyboardRows = [];
 
@@ -150,5 +151,7 @@ function buildKeyboard(menuNode, isRoot = false) {
         console.error('Bot Runtime Error:', err.message);
     });
 
+    // شروع دریافت پیام‌ها و زنده نگه داشتن پروسه در grammY
+    run(bot);
     console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
 })();
