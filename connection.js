@@ -5,8 +5,7 @@
 // ==========================================
 require('dotenv').config();
 
-// وارد کردن صحیح کلاس Bot از کتابخانه grammy
-const { Bot } = require('grammy');
+const { Bot } = require('node-telegram-bot-api');
 const { ProxyAgent, setGlobalDispatcher, getGlobalDispatcher } = require('undici');
 
 const token = process.env.BOT_TOKEN;
@@ -37,7 +36,7 @@ async function initBotWithFallback() {
         console.log(`✅ اتصال مستقیم موفقیت‌آمیز بود! نام ربات: @${me.username}`);
         return tempBot;
     } catch (directError) {
-        console.warn('⚠️ اتصال مستقیم ناموفق بود:', directError.message);
+        console.warn('⚠️ اتصال مستقیم ناموفق بود.');
     }
 
     // تست دوم: پیمایش لیست پروکسی‌ها
@@ -60,7 +59,7 @@ async function initBotWithFallback() {
             console.log(`✅ اتصال موفق با پروکسی ${proxyUrl}! نام ربات: @${me.username}`);
             return tempBot;
         } catch (proxyError) {
-            console.warn(`❌ خطای اتصال روی پروکسی ${proxyUrl}:`, proxyError.message);
+            console.warn(`❌ پروکسی ${proxyUrl} پاسخگو نبود.`);
         }
     }
 
