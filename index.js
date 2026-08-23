@@ -5,8 +5,7 @@
 // ==========================================
 const fs = require('fs');
 const path = require('path');
-const { ReplyKeyboardBuilder } = require('node-telegram-bot-api');
-const { run } = require('node-telegram-bot-api/node');
+const { Keyboard } = require('grammy');
 const { initBotWithFallback } = require('./connection');
 
 // خواندن تنظیمات از فایل JSON
@@ -35,21 +34,23 @@ function getCurrentMenuNode(pathArray) {
 
 // ساخت دکمه‌های ReplyKeyboard بر اساس لایه‌بندی در JSON
 function buildKeyboard(menuNode, isRoot = false) {
-    const builder = new ReplyKeyboardBuilder();
+    const keyboard = new Keyboard();
 
     if (menuNode && menuNode.layout) {
         menuNode.layout.forEach(row => {
-            const rowButtons = row.map(btnText => ({ text: btnText }));
-            builder.row(...rowButtons);
+            row.forEach(btnText => {
+                keyboard.text(btnText);
+            });
+            keyboard.row();
         });
     }
 
     // اگر منوی ریشه نبود، دکمه بازگشت اضافه شود
     if (!isRoot) {
-        builder.row({ text: config.back_button_text });
+        keyboard.text(config.back_button_text).row();
     }
 
-    return builder.build({ resize_keyboard: true });
+    return keyboard.resized();
 }
 
 // ==========================================
@@ -148,5 +149,7 @@ function buildKeyboard(menuNode, isRoot = false) {
     });
 
     console.log('ربات با منوی پویا آماده به کار است. در حال دریافت پیام‌ها (Polling)...');
-    run(bot);
+    
+    // شروع دریافت پیام‌ها به روش استاندارد
+    bot.start();
 })();
