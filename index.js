@@ -1,17 +1,61 @@
 // /home/nasser/apps/robotmaker/index.js
 
 // ==========================================
-// ۱. ورود کتابخانه‌ها و ماژول اتصال
+// ۱. ورود کتابخانه‌ها و فایل تنظیمات
 // ==========================================
+const fs = require('fs');
+const path = require('path');
 const { ReplyKeyboardBuilder } = require('node-telegram-bot-api');
 const { run } = require('node-telegram-bot-api/node');
 const { initBotWithFallback } = require('./connection');
 
+// خواندن تنظیمات از فایل JSON
+const configPath = path.join(__dirname, 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+// نگه‌داری وضعیت منوی فعلی هر کاربر (User State Management)
+const userState = new Map();
+
 // ==========================================
-// ۲. راه‌اندازی و تعاریف منطق ربات
+// ۲. توابع کمکی ساخت کیبورد و پیمایش منو
+// ==========================================
+
+// دریافت منوی فعلی کاربر بر اساس مسیر پیمایش شده
+function getCurrentMenuNode(pathArray) {
+    let current = config.menu;
+    for (const key of pathArray) {
+        if (current && current.items && current.items[key]) {
+            current = current.items[key];
+        } else {
+            return null;
+        }
+    }
+    return current;
+}
+
+// ساخت دکمه‌های ReplyKeyboard بر اساس لایه‌بندی در JSON
+function buildKeyboard(menuNode, isRoot = false) {
+    const builder = new ReplyKeyboardBuilder();
+
+    if (menuNode && menuNode.layout) {
+        menuNode.layout.forEach(row => {
+            const rowButtons = row.map(btnText => ({ text: btnText }));
+            builder.row(...rowButtons);
+        });
+    }
+
+    // اگر منوی ریشه نبود، دکمه بازگشت اضافه شود
+    if (!isRoot) {
+        builder.row({ text: config.back_button_text });
+    }
+
+    return builder.build({ resize_keyboard: true });
+}
+
+// ==========================================
+// ۳. راه‌اندازی و تعاریف منطق ربات
 // ==========================================
 (async () => {
-    // دریافت نمونه رباتِ متصل‌شده از ماژول شبکه
     const bot = await initBotWithFallback();
 
     if (!bot) {
@@ -19,21 +63,83 @@ const { initBotWithFallback } = require('./connection');
         process.exit(1);
     }
 
-    // ==========================================
-    // ۳. تعریف دستورات و هندلرها
-    // ==========================================
+    // ------------------------------------------
+    // هندلر دستور /start
+    // ------------------------------------------
     bot.command('start', async (ctx) => {
-        const keyboard = new ReplyKeyboardBuilder()
-            .text('نمایش پیام')
-            .build({ resize_keyboard: true });
+        const userId = ctx.from.id;
+        
+        // ریست کردن مسیر کاربر به منوی اصلی
+        userState.set(userId, []);
 
-        await ctx.reply('خوش آمدید! برای دریافت پیام روی دکمه زیر کلیک کنید:', {
-            reply_markup: keyboard
-        });
+        const keyboard = buildKeyboard(config.menu, true);
+
+        // ارسال تصویر به همراه کپشن و کیبورد منوی اصلی
+        if (config.start && config.start.file_id) {
+            await ctx.replyWithPhoto(config.start.file_id, {
+                caption: config.start.caption || '',
+                reply_markup: keyboard
+            });
+        } else {
+            await ctx.reply(config.start.caption || 'خوش آمدید!', {
+                reply_markup: keyboard
+            });
+        }
     });
 
-    bot.hears('نمایش پیام', async (ctx) => {
-        await ctx.reply('Hello Worldxxxxxdddddd!');
+    // ------------------------------------------
+    // هندلر دریافت تمام پیام‌های متنی (مدیریت منوها)
+    // ------------------------------------------
+    bot.on('message:text', async (ctx) => {
+        const text = ctx.message.text;
+        const userId = ctx.from.id;
+
+        // صرف‌نظر از اجرای متن‌هایی که دستور هستند (مثل /start)
+        if (text.startsWith('/')) return;
+
+        // دریافت مسیر فعلی کاربر در درخت منو
+        let userPath = userState.get(userId) || [];
+        let currentMenu = getCurrentMenuNode(userPath);
+
+        if (!currentMenu) {
+            userPath = [];
+            currentMenu = config.menu;
+            userState.set(userId, userPath);
+        }
+
+        // ۱. مدیریت کلیک روی دکمه «بازگشت»
+        if (text === config.back_button_text) {
+            if (userPath.length > 0) {
+                userPath.pop(); // برگشت به سطح قبل
+                userState.set(userId, userPath);
+            }
+            
+            const parentMenu = getCurrentMenuNode(userPath);
+            const isRoot = userPath.length === 0;
+            const keyboard = buildKeyboard(parentMenu, isRoot);
+
+            await ctx.reply('بازگشت به منوی قبلی:', { reply_markup: keyboard });
+            return;
+        }
+
+        // ۲. بررسی وجود دکمه کلیک‌شده در منوی فعلی
+        if (currentMenu.items && currentMenu.items[text]) {
+            const selectedItem = currentMenu.items[text];
+
+            if (selectedItem.type === 'menu') {
+                // هدایت کاربر به زیرمنوی جدید
+                userPath.push(text);
+                userState.set(userId, userPath);
+
+                const isRoot = userPath.length === 0;
+                const keyboard = buildKeyboard(selectedItem, isRoot);
+
+                await ctx.reply(`منوی ${text}:`, { reply_markup: keyboard });
+            } else if (selectedItem.type === 'message') {
+                // ارسال پاسخ نهایی پیام به کاربر (حفظ کیبورد فعلی)
+                await ctx.reply(selectedItem.response);
+            }
+        }
     });
 
     // مدیریت خطاهای زمان اجرا
@@ -41,6 +147,6 @@ const { initBotWithFallback } = require('./connection');
         console.error('Bot Runtime Error:', err.message);
     });
 
-    console.log('ربات آماده به کار است. در حال دریافت پیام‌ها (Polling)...');
+    console.log('ربات با منوی پویا آماده به کار است. در حال دریافت پیام‌ها (Polling)...');
     run(bot);
 })();
