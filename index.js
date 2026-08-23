@@ -74,9 +74,9 @@ function buildKeyboard(menuNode, isRoot = false) {
 
         const keyboard = buildKeyboard(config.menu, true);
 
-        // ارسال تصویر به همراه کپشن و کیبورد منوی اصلی
+        // ارسال تصویر با استفاده از متد api.sendPhoto در grammY
         if (config.start && config.start.file_id) {
-            await ctx.replyWithPhoto(config.start.file_id, {
+            await ctx.api.sendPhoto(ctx.chat.id, config.start.file_id, {
                 caption: config.start.caption || '',
                 reply_markup: keyboard
             });
