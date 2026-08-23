@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@grammyjs/runner": "^2.0.3",
     "dotenv": "^17.4.2",
     "https-proxy-agent": "^9.1.0",
     "node-telegram-bot-api": "^2.0.0",
