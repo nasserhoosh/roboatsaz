@@ -1,0 +1,39 @@
+{
+  "welcome": {
+    "text": "به ربات هوشمند خوش آمدید! لطفاً گزینه مورد نظر خود را انتخاب کنید:"
+  },
+  "rootMenu": "main_menu",
+  "menus": {
+    "main_menu": {
+      "text": "منوی اصلی:",
+      "buttons": [
+        [
+          { "text": "خدمات ما", "action": "navigate", "target": "services_menu" },
+          { "text": "درباره ما", "action": "navigate", "target": "about_menu" }
+        ],
+        [
+          { "text": "پشتیبانی", "action": "reply", "message": "جهت ارتباط با پشتیبانی پیام خود را ارسال کنید." }
+        ]
+      ]
+    },
+    "services_menu": {
+      "parent": "main_menu",
+      "text": "بخش خدمات: لطفاً یک سرویس را انتخاب کنید:",
+      "buttons": [
+        [
+          { "text": "طراحی سایت", "action": "reply", "message": "خدمات طراحی سایت تخصصی شامل Node.js و React." },
+          { "text": "ربات تلگرام", "action": "reply", "message": "طراحی انواع ربات‌های متصل به دیتابیس و سرویس‌ها." }
+        ]
+      ]
+    },
+    "about_menu": {
+      "parent": "main_menu",
+      "text": "درباره مجموعه:",
+      "buttons": [
+        [
+          { "text": "اطلاعات شرکت", "action": "reply", "message": "مرکز هوشمندسازی با سال‌ها تجربه در ارائه راهکارهای تحت وب." }
+        ]
+      ]
+    }
+  }
+}
