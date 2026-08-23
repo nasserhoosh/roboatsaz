@@ -31,7 +31,7 @@ function getCurrentMenuNode(pathArray) {
     return current;
 }
 
-// ساخت ساختار ReplyKeyboard بر اساس لایه‌بندی JSON برای grammY
+// ساخت ساختار ReplyKeyboard بر اساس لایه‌بندی JSON
 function buildKeyboard(menuNode, isRoot = false) {
     const keyboardRows = [];
 
@@ -151,7 +151,4 @@ function buildKeyboard(menuNode, isRoot = false) {
     });
 
     console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
-    
-    // شروع دریافت پیام‌ها
-    bot.start();
 })();
