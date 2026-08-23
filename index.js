@@ -33,7 +33,7 @@ const { initBotWithFallback } = require('./connection');
     });
 
     bot.hears('نمایش پیام', async (ctx) => {
-        await ctx.reply('Hello World!');
+        await ctx.reply('Hello Worldddddddddddddddddd!');
     });
 
     // مدیریت خطاهای زمان اجرا
