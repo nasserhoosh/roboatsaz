@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "https-proxy-agent": "^9.1.0",
+    "node-telegram-bot-api": "^2.0.0",
+    "undici": "^7.29.0"
+  }
+}
