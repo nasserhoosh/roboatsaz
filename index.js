@@ -73,15 +73,16 @@ function buildKeyboard(menuNode, isRoot = false) {
     // ------------------------------------------
     bot.command('start', async (ctx) => {
         const userId = ctx.from.id;
+        const chatId = ctx.chat.id;
 
         // ریست کردن مسیر کاربر به منوی اصلی
         userState.set(userId, []);
 
         const options = buildKeyboard(config.menu, true);
 
-        // ارسال تصویر خوش‌آمدگویی از طریق API مستقیم
+        // ارسال تصویر خوش‌آمدگویی از طریق bot.api برای اطمینان از صحت متد
         if (config.start && config.start.file_id) {
-            await ctx.api.sendPhoto(ctx.chat.id, config.start.file_id, {
+            await bot.api.sendPhoto(chatId, config.start.file_id, {
                 caption: config.start.caption || '',
                 reply_markup: options.reply_markup
             });
@@ -150,8 +151,13 @@ function buildKeyboard(menuNode, isRoot = false) {
         console.error('Bot Runtime Error:', err.message);
     });
 
-    console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
-
-    // زنده نگه داشتن پروسه Node.js برای PM2 بدون تداخل در دریافت پیام‌ها
-    setInterval(() => {}, 1000 * 60 * 60);
+    // ------------------------------------------
+    // شروع رسمی دریافت پیام‌ها (Start Polling)
+    // ------------------------------------------
+    console.log('در حال استارت Polling...');
+    bot.start({
+        onStart: () => {
+            console.log('ربات با موفقیت آنلاین شد و در حال گوش دادن به پیام‌هاست.');
+        }
+    });
 })();
