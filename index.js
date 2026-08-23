@@ -5,7 +5,6 @@
 // ==========================================
 const fs = require('fs');
 const path = require('path');
-const { Keyboard } = require('grammy');
 const { initBotWithFallback } = require('./connection');
 
 // خواندن تنظیمات از فایل JSON
@@ -32,31 +31,36 @@ function getCurrentMenuNode(pathArray) {
     return current;
 }
 
-// ساخت دکمه‌های ReplyKeyboard بر اساس لایه‌بندی در JSON
+// ساخت دکمه‌های ReplyKeyboard برای node-telegram-bot-api
 function buildKeyboard(menuNode, isRoot = false) {
-    const keyboard = new Keyboard();
+    const keyboardRows = [];
 
+    // ساخت سطرهای منو طبق layout در فایل JSON
     if (menuNode && menuNode.layout) {
         menuNode.layout.forEach(row => {
-            row.forEach(btnText => {
-                keyboard.text(btnText);
-            });
-            keyboard.row();
+            const rowButtons = row.map(btnText => ({ text: btnText }));
+            keyboardRows.push(rowButtons);
         });
     }
 
-    // اگر منوی ریشه نبود، دکمه بازگشت اضافه شود
+    // اضافه کردن دکمه بازگشت در صورتی که منوی اصلی نباشد
     if (!isRoot) {
-        keyboard.text(config.back_button_text).row();
+        keyboardRows.push([{ text: config.back_button_text }]);
     }
 
-    return keyboard.resized();
+    return {
+        reply_markup: {
+            keyboard: keyboardRows,
+            resize_keyboard: true
+        }
+    };
 }
 
 // ==========================================
 // ۳. راه‌اندازی و تعاریف منطق ربات
 // ==========================================
 (async () => {
+    // دریافت نمونه bot متصل‌شده از ماژول شبکه
     const bot = await initBotWithFallback();
 
     if (!bot) {
@@ -67,36 +71,34 @@ function buildKeyboard(menuNode, isRoot = false) {
     // ------------------------------------------
     // هندلر دستور /start
     // ------------------------------------------
-    bot.command('start', async (ctx) => {
-        const userId = ctx.from.id;
-        
+    bot.onText(/\/start/, async (msg) => {
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
+
         // ریست کردن مسیر کاربر به منوی اصلی
         userState.set(userId, []);
 
-        const keyboard = buildKeyboard(config.menu, true);
+        const options = buildKeyboard(config.menu, true);
 
-        // ارسال تصویر با استفاده از متد api.sendPhoto در grammY
+        // ارسال تصویر خوش‌آمدگویی به همراه کپشن و کیبورد
         if (config.start && config.start.file_id) {
-            await ctx.api.sendPhoto(ctx.chat.id, config.start.file_id, {
-                caption: config.start.caption || '',
-                reply_markup: keyboard
-            });
+            options.caption = config.start.caption || '';
+            await bot.sendPhoto(chatId, config.start.file_id, options);
         } else {
-            await ctx.reply(config.start.caption || 'خوش آمدید!', {
-                reply_markup: keyboard
-            });
+            await bot.sendMessage(chatId, config.start.caption || 'خوش آمدید!', options);
         }
     });
 
     // ------------------------------------------
-    // هندلر دریافت تمام پیام‌های متنی (مدیریت منوها)
+    // هندلر دریافت پیام‌های متنی (مدیریت منوها)
     // ------------------------------------------
-    bot.on('message:text', async (ctx) => {
-        const text = ctx.message.text;
-        const userId = ctx.from.id;
+    bot.on('message', async (msg) => {
+        // اگر پیام متنی نباشد یا دستور باشد، پردازش نشود
+        if (!msg.text || msg.text.startsWith('/')) return;
 
-        // صرف‌نظر از اجرای متن‌هایی که دستور هستند (مثل /start)
-        if (text.startsWith('/')) return;
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
+        const text = msg.text;
 
         // دریافت مسیر فعلی کاربر در درخت منو
         let userPath = userState.get(userId) || [];
@@ -111,15 +113,15 @@ function buildKeyboard(menuNode, isRoot = false) {
         // ۱. مدیریت کلیک روی دکمه «بازگشت»
         if (text === config.back_button_text) {
             if (userPath.length > 0) {
-                userPath.pop(); // برگشت به سطح قبل
+                userPath.pop(); // برگشت به یک سطح قبل
                 userState.set(userId, userPath);
             }
-            
+
             const parentMenu = getCurrentMenuNode(userPath);
             const isRoot = userPath.length === 0;
-            const keyboard = buildKeyboard(parentMenu, isRoot);
+            const options = buildKeyboard(parentMenu, isRoot);
 
-            await ctx.reply('بازگشت به منوی قبلی:', { reply_markup: keyboard });
+            await bot.sendMessage(chatId, 'بازگشت به منوی قبلی:', options);
             return;
         }
 
@@ -133,23 +135,20 @@ function buildKeyboard(menuNode, isRoot = false) {
                 userState.set(userId, userPath);
 
                 const isRoot = userPath.length === 0;
-                const keyboard = buildKeyboard(selectedItem, isRoot);
+                const options = buildKeyboard(selectedItem, isRoot);
 
-                await ctx.reply(`منوی ${text}:`, { reply_markup: keyboard });
+                await bot.sendMessage(chatId, `منوی ${text}:`, options);
             } else if (selectedItem.type === 'message') {
-                // ارسال پاسخ نهایی پیام به کاربر (حفظ کیبورد فعلی)
-                await ctx.reply(selectedItem.response);
+                // ارسال پاسخ نهایی متناظر با دکمه
+                await bot.sendMessage(chatId, selectedItem.response);
             }
         }
     });
 
     // مدیریت خطاهای زمان اجرا
-    bot.catch((err) => {
-        console.error('Bot Runtime Error:', err.message);
+    bot.on('polling_error', (error) => {
+        console.error('Bot Polling Error:', error.message);
     });
 
-    console.log('ربات با منوی پویا آماده به کار است. در حال دریافت پیام‌ها (Polling)...');
-    
-    // شروع دریافت پیام‌ها به روش استاندارد
-    bot.start();
+    console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
 })();
