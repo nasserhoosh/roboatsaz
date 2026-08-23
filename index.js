@@ -80,9 +80,9 @@ function buildKeyboard(menuNode, isRoot = false) {
 
         const options = buildKeyboard(config.menu, true);
 
-        // ارسال تصویر خوش‌آمدگویی به همراه کپشن و کیبورد
+        // ارسال تصویر خوش‌آمدگویی از طریق ctx.api.sendPhoto جهت جلوگیری از خطای متد روی ctx
         if (config.start && config.start.file_id) {
-            await ctx.replyWithPhoto(config.start.file_id, {
+            await ctx.api.sendPhoto(ctx.chat.id, config.start.file_id, {
                 caption: config.start.caption || '',
                 reply_markup: options.reply_markup
             });
@@ -151,7 +151,7 @@ function buildKeyboard(menuNode, isRoot = false) {
         console.error('Bot Runtime Error:', err.message);
     });
 
-    // شروع دریافت پیام‌ها و زنده نگه داشتن پروسه در grammY
+    // شروع دریافت پیام‌ها و زنده نگه داشتن پروسه
     run(bot);
     console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
 })();
