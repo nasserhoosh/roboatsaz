@@ -5,7 +5,7 @@
 // ==========================================
 require('dotenv').config();
 
-// وارد کردن کلاس Bot مستقیماً از grammY
+// وارد کردن صحیح کلاس Bot از کتابخانه grammy
 const { Bot } = require('grammy');
 const { ProxyAgent, setGlobalDispatcher, getGlobalDispatcher } = require('undici');
 
@@ -37,7 +37,7 @@ async function initBotWithFallback() {
         console.log(`✅ اتصال مستقیم موفقیت‌آمیز بود! نام ربات: @${me.username}`);
         return tempBot;
     } catch (directError) {
-        console.warn('⚠️ اتصال مستقیم ناموفق بود.');
+        console.warn('⚠️ اتصال مستقیم ناموفق بود:', directError.message);
     }
 
     // تست دوم: پیمایش لیست پروکسی‌ها
@@ -60,7 +60,7 @@ async function initBotWithFallback() {
             console.log(`✅ اتصال موفق با پروکسی ${proxyUrl}! نام ربات: @${me.username}`);
             return tempBot;
         } catch (proxyError) {
-            console.warn(`❌ پروکسی ${proxyUrl} پاسخگو نبود.`);
+            console.warn(`❌ خطای اتصال روی پروکسی ${proxyUrl}:`, proxyError.message);
         }
     }
 

@@ -5,6 +5,7 @@
 // ==========================================
 const fs = require('fs');
 const path = require('path');
+const { run } = require('@grammyjs/runner');
 const { initBotWithFallback } = require('./connection');
 
 // خواندن تنظیمات از فایل JSON
@@ -151,11 +152,8 @@ function buildKeyboard(menuNode, isRoot = false) {
     });
 
     // ------------------------------------------
-    // شروع رسمی Polling در grammY
+    // شروع دریافت پیام‌ها
     // ------------------------------------------
-    bot.start({
-        onStart: () => {
-            console.log('✅ ربات grammY با موفقیت آنلاین شد و در حال پاسخ‌گویی به پیام‌هاست.');
-        }
-    });
+    run(bot);
+    console.log('✅ ربات با موفقیت فعال شد و آماده دریافت پیام است.');
 })();
