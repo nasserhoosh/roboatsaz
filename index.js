@@ -5,7 +5,6 @@
 // ==========================================
 const fs = require('fs');
 const path = require('path');
-const { run } = require('@grammyjs/runner');
 const { initBotWithFallback } = require('./connection');
 
 // خواندن تنظیمات از فایل JSON
@@ -74,16 +73,15 @@ function buildKeyboard(menuNode, isRoot = false) {
     // ------------------------------------------
     bot.command('start', async (ctx) => {
         const userId = ctx.from.id;
-        const chatId = ctx.chat.id;
 
         // ریست کردن مسیر کاربر به منوی اصلی
         userState.set(userId, []);
 
         const options = buildKeyboard(config.menu, true);
 
-        // ارسال تصویر خوش‌آمدگویی از طریق bot.api
+        // ارسال تصویر خوش‌آمدگویی یا متن ساده
         if (config.start && config.start.file_id) {
-            await bot.api.sendPhoto(chatId, config.start.file_id, {
+            await ctx.replyWithPhoto(config.start.file_id, {
                 caption: config.start.caption || '',
                 reply_markup: options.reply_markup
             });
@@ -153,8 +151,11 @@ function buildKeyboard(menuNode, isRoot = false) {
     });
 
     // ------------------------------------------
-    // شروع دریافت پیام‌ها با runner در grammY
+    // شروع رسمی Polling در grammY
     // ------------------------------------------
-    run(bot);
-    console.log('ربات با موفقیت آنلاین شد و در حال گوش دادن به پیام‌هاست.');
+    bot.start({
+        onStart: () => {
+            console.log('✅ ربات grammY با موفقیت آنلاین شد و در حال پاسخ‌گویی به پیام‌هاست.');
+        }
+    });
 })();

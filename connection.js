@@ -5,7 +5,8 @@
 // ==========================================
 require('dotenv').config();
 
-const { Bot } = require('node-telegram-bot-api');
+// وارد کردن کلاس Bot مستقیماً از grammY
+const { Bot } = require('grammy');
 const { ProxyAgent, setGlobalDispatcher, getGlobalDispatcher } = require('undici');
 
 const token = process.env.BOT_TOKEN;
