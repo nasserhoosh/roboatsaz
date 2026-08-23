@@ -31,11 +31,11 @@ function getCurrentMenuNode(pathArray) {
     return current;
 }
 
-// ساخت دکمه‌های ReplyKeyboard برای node-telegram-bot-api
+// ساخت ساختار ReplyKeyboard بر اساس لایه‌بندی JSON برای grammY
 function buildKeyboard(menuNode, isRoot = false) {
     const keyboardRows = [];
 
-    // ساخت سطرهای منو طبق layout در فایل JSON
+    // اضافه کردن سطرهای منو طبق layout در فایل JSON
     if (menuNode && menuNode.layout) {
         menuNode.layout.forEach(row => {
             const rowButtons = row.map(btnText => ({ text: btnText }));
@@ -60,7 +60,7 @@ function buildKeyboard(menuNode, isRoot = false) {
 // ۳. راه‌اندازی و تعاریف منطق ربات
 // ==========================================
 (async () => {
-    // دریافت نمونه bot متصل‌شده از ماژول شبکه
+    // دریافت نمونه رباتِ متصل‌شده از ماژول شبکه
     const bot = await initBotWithFallback();
 
     if (!bot) {
@@ -71,9 +71,8 @@ function buildKeyboard(menuNode, isRoot = false) {
     // ------------------------------------------
     // هندلر دستور /start
     // ------------------------------------------
-    bot.onText(/\/start/, async (msg) => {
-        const chatId = msg.chat.id;
-        const userId = msg.from.id;
+    bot.command('start', async (ctx) => {
+        const userId = ctx.from.id;
 
         // ریست کردن مسیر کاربر به منوی اصلی
         userState.set(userId, []);
@@ -82,23 +81,24 @@ function buildKeyboard(menuNode, isRoot = false) {
 
         // ارسال تصویر خوش‌آمدگویی به همراه کپشن و کیبورد
         if (config.start && config.start.file_id) {
-            options.caption = config.start.caption || '';
-            await bot.sendPhoto(chatId, config.start.file_id, options);
+            await ctx.replyWithPhoto(config.start.file_id, {
+                caption: config.start.caption || '',
+                reply_markup: options.reply_markup
+            });
         } else {
-            await bot.sendMessage(chatId, config.start.caption || 'خوش آمدید!', options);
+            await ctx.reply(config.start.caption || 'خوش آمدید!', options);
         }
     });
 
     // ------------------------------------------
     // هندلر دریافت پیام‌های متنی (مدیریت منوها)
     // ------------------------------------------
-    bot.on('message', async (msg) => {
-        // اگر پیام متنی نباشد یا دستور باشد، پردازش نشود
-        if (!msg.text || msg.text.startsWith('/')) return;
+    bot.on('message:text', async (ctx) => {
+        const text = ctx.message.text;
+        const userId = ctx.from.id;
 
-        const chatId = msg.chat.id;
-        const userId = msg.from.id;
-        const text = msg.text;
+        // صرف‌نظر از اجرای متن‌هایی که دستور هستند (مثل /start)
+        if (text.startsWith('/')) return;
 
         // دریافت مسیر فعلی کاربر در درخت منو
         let userPath = userState.get(userId) || [];
@@ -121,7 +121,7 @@ function buildKeyboard(menuNode, isRoot = false) {
             const isRoot = userPath.length === 0;
             const options = buildKeyboard(parentMenu, isRoot);
 
-            await bot.sendMessage(chatId, 'بازگشت به منوی قبلی:', options);
+            await ctx.reply('بازگشت به منوی قبلی:', options);
             return;
         }
 
@@ -137,18 +137,21 @@ function buildKeyboard(menuNode, isRoot = false) {
                 const isRoot = userPath.length === 0;
                 const options = buildKeyboard(selectedItem, isRoot);
 
-                await bot.sendMessage(chatId, `منوی ${text}:`, options);
+                await ctx.reply(`منوی ${text}:`, options);
             } else if (selectedItem.type === 'message') {
                 // ارسال پاسخ نهایی متناظر با دکمه
-                await bot.sendMessage(chatId, selectedItem.response);
+                await ctx.reply(selectedItem.response);
             }
         }
     });
 
     // مدیریت خطاهای زمان اجرا
-    bot.on('polling_error', (error) => {
-        console.error('Bot Polling Error:', error.message);
+    bot.catch((err) => {
+        console.error('Bot Runtime Error:', err.message);
     });
 
     console.log('ربات با موفقیت اجرا شد و آماده دریافت پیام است.');
+    
+    // شروع دریافت پیام‌ها
+    bot.start();
 })();
