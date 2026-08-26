@@ -1,0 +1,46 @@
+// /home/nasser/apps/robotmaker/onboardingConfig.js
+//
+// ثابت‌های مربوط به فلوی «ایجاد ربات» (درخواست شماره تلفن، نام، تأیید، لینک درگاه).
+
+const CREATE_BOT_BUTTON_TEXT = '🤖 ایجاد ربات';
+const REQUEST_CONTACT_BUTTON_TEXT = '📱 اشتراک‌گذاری شماره تلفن';
+const CONFIRM_BUTTON_TEXT = '✅ تأیید';
+
+// file_id عکس دستورالعمل اشتراک‌گذاری شماره تلفن قبلاً اینجا بود؛ چون این file_id
+// متعلق به بات دیگری بود و ارسالش با sendPhoto بی‌صدا شکست می‌خورد (نه throw می‌کرد نه
+// موفق می‌شد)، فعلاً با یک پیام متنی ساده جایگزین شده. بعداً اگر عکس واقعی این بات
+// آماده شد، می‌توان دوباره از sendPhoto با آن file_id استفاده کرد.
+const PHONE_SHARE_INSTRUCTION_TEXT =
+    'برای ادامه، لطفاً شماره تلفن خود را با استفاده از دکمه‌ی زیر به اشتراک بگذارید.\n\n' +
+    'روی دکمه‌ی «📱 اشتراک‌گذاری شماره تلفن» در پایین صفحه بزنید و در پنجره‌ای که باز می‌شود، گزینه‌ی «Share» را انتخاب کنید.';
+
+const ASK_FULL_NAME_MESSAGE = 'ممنون! حالا لطفاً نام و نام خانوادگی کامل خود را ارسال کنید.';
+
+function buildConfirmationMessage(phoneNumber, fullName) {
+    return `لطفاً اطلاعات زیر را بررسی و تأیید کنید:\n\n📱 شماره تلفن: ${phoneNumber}\n👤 نام کامل: ${fullName}\n\nدر صورت تأیید، روی دکمه‌ی «${CONFIRM_BUTTON_TEXT}» بزنید.`;
+}
+
+/**
+ * ساخت لینک درگاه برای یک پروفایل (بر اساس GATEWAY_BASE_URL در .env و توکن/هش پروفایل).
+ */
+function buildGatewayLink(profileId) {
+    const baseUrl = process.env.GATEWAY_BASE_URL || 'https://gateway.example.com/create';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}token=${profileId}`;
+}
+
+function buildGatewayLinkMessage(profileId) {
+    const link = buildGatewayLink(profileId);
+    return `پروفایل شما با موفقیت ثبت شد. 🎉\n\nبرای ساخت منوی ربات خود، از لینک زیر استفاده کنید:\n${link}`;
+}
+
+module.exports = {
+    CREATE_BOT_BUTTON_TEXT,
+    REQUEST_CONTACT_BUTTON_TEXT,
+    CONFIRM_BUTTON_TEXT,
+    PHONE_SHARE_INSTRUCTION_TEXT,
+    ASK_FULL_NAME_MESSAGE,
+    buildConfirmationMessage,
+    buildGatewayLink,
+    buildGatewayLinkMessage,
+};

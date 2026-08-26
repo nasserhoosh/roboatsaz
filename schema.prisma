@@ -25,3 +25,18 @@ model BotMenu {
   @@unique([fromId, menuName], name: "from_id_menu_name")
   @@map("bot_menus")
 }
+
+model Profile {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromId              BigInt    @unique @map("from_id")
+  phoneNumber         String?   @map("phone_number")
+  fullName            String?   @map("full_name")
+  telegramUsername    String?   @map("telegram_username")
+  telegramFirstName   String?   @map("telegram_first_name")
+  telegramLastName    String?   @map("telegram_last_name")
+  profileCompletedAt  DateTime? @map("profile_completed_at") @db.Timestamptz
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("profiles")
+}

@@ -34,22 +34,66 @@ function buildKeyboard(nodes, showBackButton, backButtonText) {
 }
 
 /**
- * ساخت reply_markup برای لیست انتخاب منو (سطح بالاتر از همه‌ی منوهای یک کاربر).
- * ورودی رکوردهای جدول bot_menus است (هر رکورد یک دکمه با متن menuName).
- * دکمه بازگشتی در این سطح معنا ندارد چون بالاترین سطح است.
- * (سطح لیست منو icon ندارد چون از خودِ جدول bot_menus می‌آید نه از menu_json.)
- */
-function buildMenuListKeyboard(menuRows) {
-    const pseudoNodes = menuRows.map((row) => ({ text: row.menuName }));
-    return buildKeyboard(pseudoNodes, false, null);
-}
-
-/**
  * ساخت کیبورد سافت‌منو: فقط یک دکمه‌ی بازگشت (کاربر باید عدد را تایپ کند).
  */
 function buildSoftMenuKeyboard(backButtonText) {
     const builder = new ReplyKeyboardBuilder();
     builder.text(backButtonText).row();
+    return builder.build({ resize_keyboard: true });
+}
+
+/**
+ * کیبورد درخواست شماره تلفن (برای فلوی «ایجاد ربات»):
+ * یک دکمه‌ی request_contact + یک دکمه‌ی بازگشت، هرکدام در ردیف خودشان.
+ */
+function buildRequestContactKeyboard(requestContactLabel, backButtonText) {
+    const builder = new ReplyKeyboardBuilder();
+    builder.requestContact(requestContactLabel).row();
+    builder.text(backButtonText).row();
+    return builder.build({ resize_keyboard: true });
+}
+
+/**
+ * کیبورد ساده‌ی تک‌دکمه‌ای بازگشت (برای مراحلی از onboarding که کیبورد دیگری لازم نیست،
+ * مثل انتظار برای تایپ نام کامل).
+ */
+function buildBackOnlyKeyboard(backButtonText) {
+    const builder = new ReplyKeyboardBuilder();
+    builder.text(backButtonText).row();
+    return builder.build({ resize_keyboard: true });
+}
+
+/**
+ * کیبورد تأیید نهایی onboarding: دکمه‌ی تأیید + دکمه‌ی بازگشت (برای لغو/ویرایش از نو).
+ */
+function buildConfirmationKeyboard(confirmLabel, backButtonText) {
+    const builder = new ReplyKeyboardBuilder();
+    builder.text(confirmLabel).row();
+    builder.text(backButtonText).row();
+    return builder.build({ resize_keyboard: true });
+}
+
+/**
+ * ساخت reply_markup برای لیست انتخاب منو (سطح بالاتر از همه‌ی منوهای یک کاربر).
+ * ورودی رکوردهای جدول bot_menus است (هر رکورد یک دکمه با متن menuName)
+ * به‌علاوه‌ی دکمه‌ی «ایجاد ربات» که همیشه در ردیف مستقل خودش در انتها اضافه می‌شود.
+ * دکمه بازگشتی در این سطح معنا ندارد چون بالاترین سطح است.
+ * (سطح لیست منو icon ندارد چون از خودِ جدول bot_menus می‌آید نه از menu_json.)
+ */
+function buildMenuListKeyboard(menuRows, createBotButtonText) {
+    const pseudoNodes = menuRows.map((row) => ({ text: row.menuName }));
+    const builder = new ReplyKeyboardBuilder();
+
+    for (let i = 0; i < pseudoNodes.length; i += BUTTONS_PER_ROW) {
+        const rowNodes = pseudoNodes.slice(i, i + BUTTONS_PER_ROW);
+        for (const node of rowNodes) {
+            builder.text(node.text);
+        }
+        builder.row();
+    }
+
+    builder.text(createBotButtonText).row(); // همیشه در ردیف مستقل خودش
+
     return builder.build({ resize_keyboard: true });
 }
 
@@ -68,4 +112,12 @@ function buildSoftMenuText(promptText, nodes) {
     return `${promptText}\n\n${lines.join('\n')}\n\nلطفاً عدد مورد نظر را ارسال کنید.`;
 }
 
-module.exports = { buildKeyboard, buildMenuListKeyboard, buildSoftMenuKeyboard, buildSoftMenuText };
+module.exports = {
+    buildKeyboard,
+    buildMenuListKeyboard,
+    buildSoftMenuKeyboard,
+    buildSoftMenuText,
+    buildRequestContactKeyboard,
+    buildBackOnlyKeyboard,
+    buildConfirmationKeyboard,
+};
