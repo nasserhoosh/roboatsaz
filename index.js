@@ -22,7 +22,8 @@ const {
     CREATE_BOT_BUTTON_TEXT,
     REQUEST_CONTACT_BUTTON_TEXT,
     CONFIRM_BUTTON_TEXT,
-    PHONE_SHARE_INSTRUCTION_TEXT,
+    PHONE_SHARE_INSTRUCTION_PHOTO_FILE_ID,
+    PHONE_SHARE_INSTRUCTION_CAPTION,
     ASK_FULL_NAME_MESSAGE,
     buildConfirmationMessage,
     buildGatewayLinkMessage,
@@ -137,18 +138,25 @@ function resolveSelectedNode(menuIndex, currentParentId, text) {
 // ۳. توابع کمکی فلوی onboarding («ایجاد ربات»)
 // ==========================================
 
-/** شروع فلوی onboarding: ارسال متن دستورالعمل + دکمه‌ی اشتراک‌گذاری شماره. */
+/** شروع فلوی onboarding: ارسال عکس دستورالعمل + دکمه‌ی اشتراک‌گذاری شماره. */
 async function startCreateBotFlow(ctx, chatId) {
     console.log(`[onboarding] startCreateBotFlow: chatId=${chatId}`);
     userState.startOnboarding(chatId);
     const keyboard = buildRequestContactKeyboard(REQUEST_CONTACT_BUTTON_TEXT, BACK_BUTTON_TEXT);
-    console.log(`[onboarding] sending instruction message to chatId=${chatId}`);
+    console.log(`[onboarding] sending instruction photo to chatId=${chatId}`);
+    // نکته: این پکیج متد ctx.replyWithPhoto ندارد؛ ارسال عکس باید از طریق ctx.api.sendPhoto
+    // (یا bot.api.sendPhoto) با پارامترهای کامل (chat_id و ...) انجام شود، نه ctx.reply.
     await withTimeout(
-        ctx.reply(PHONE_SHARE_INSTRUCTION_TEXT, { reply_markup: keyboard }),
+        ctx.api.sendPhoto({
+            chat_id: chatId,
+            photo: PHONE_SHARE_INSTRUCTION_PHOTO_FILE_ID,
+            caption: PHONE_SHARE_INSTRUCTION_CAPTION,
+            reply_markup: keyboard,
+        }),
         10000,
-        'ctx.reply(instruction text)'
+        'ctx.api.sendPhoto(instruction photo)'
     );
-    console.log(`[onboarding] instruction message sent to chatId=${chatId}`);
+    console.log(`[onboarding] instruction photo sent to chatId=${chatId}`);
 }
 
 /**

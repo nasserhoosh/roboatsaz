@@ -6,13 +6,12 @@ const CREATE_BOT_BUTTON_TEXT = '🤖 ایجاد ربات';
 const REQUEST_CONTACT_BUTTON_TEXT = '📱 اشتراک‌گذاری شماره تلفن';
 const CONFIRM_BUTTON_TEXT = '✅ تأیید';
 
-// file_id عکس دستورالعمل اشتراک‌گذاری شماره تلفن قبلاً اینجا بود؛ چون این file_id
-// متعلق به بات دیگری بود و ارسالش با sendPhoto بی‌صدا شکست می‌خورد (نه throw می‌کرد نه
-// موفق می‌شد)، فعلاً با یک پیام متنی ساده جایگزین شده. بعداً اگر عکس واقعی این بات
-// آماده شد، می‌توان دوباره از sendPhoto با آن file_id استفاده کرد.
-const PHONE_SHARE_INSTRUCTION_TEXT =
-    'برای ادامه، لطفاً شماره تلفن خود را با استفاده از دکمه‌ی زیر به اشتراک بگذارید.\n\n' +
-    'روی دکمه‌ی «📱 اشتراک‌گذاری شماره تلفن» در پایین صفحه بزنید و در پنجره‌ای که باز می‌شود، گزینه‌ی «Share» را انتخاب کنید.';
+// file_id عکس دستورالعمل اشتراک‌گذاری شماره تلفن (از تلگرام گرفته شده).
+const PHONE_SHARE_INSTRUCTION_PHOTO_FILE_ID =
+    'AgACAgQAAxkBAAIBQ2qPAAHkpJsOVq0OXnQteWyszNpktQACrxBrG4W6SFBjPow8LqJq4gEAAwIAA3MAAz0E';
+
+const PHONE_SHARE_INSTRUCTION_CAPTION =
+    'برای ادامه، لطفاً شماره تلفن خود را با استفاده از دکمه‌ی زیر به اشتراک بگذارید.';
 
 const ASK_FULL_NAME_MESSAGE = 'ممنون! حالا لطفاً نام و نام خانوادگی کامل خود را ارسال کنید.';
 
@@ -38,7 +37,8 @@ module.exports = {
     CREATE_BOT_BUTTON_TEXT,
     REQUEST_CONTACT_BUTTON_TEXT,
     CONFIRM_BUTTON_TEXT,
-    PHONE_SHARE_INSTRUCTION_TEXT,
+    PHONE_SHARE_INSTRUCTION_PHOTO_FILE_ID,
+    PHONE_SHARE_INSTRUCTION_CAPTION,
     ASK_FULL_NAME_MESSAGE,
     buildConfirmationMessage,
     buildGatewayLink,
