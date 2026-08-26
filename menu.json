@@ -1,39 +1,56 @@
 {
-  "welcome": {
-    "text": "به ربات هوشمند خوش آمدید! لطفاً گزینه مورد نظر خود را انتخاب کنید:"
-  },
-  "rootMenu": "main_menu",
-  "menus": {
-    "main_menu": {
-      "text": "منوی اصلی:",
-      "buttons": [
-        [
-          { "text": "خدمات ما", "action": "navigate", "target": "services_menu" },
-          { "text": "درباره ما", "action": "navigate", "target": "about_menu" }
-        ],
-        [
-          { "text": "پشتیبانی", "action": "reply", "message": "جهت ارتباط با پشتیبانی پیام خود را ارسال کنید." }
-        ]
+  "start_message": "خوش آمدید! 👋\nاز دکمه‌های زیر یکی را انتخاب کنید:",
+  "back_button_text": "🔙 بازگشت",
+  "menu": [
+    {
+      "id": "about",
+      "text": "درباره ما",
+      "message": "این یک ربات نمونه مبتنی بر منوی JSON است.",
+      "children": [
+        {
+          "id": "about_team",
+          "text": "تیم ما",
+          "message": "ما یک تیم کوچک و پرانرژی هستیم."
+        },
+        {
+          "id": "about_contact",
+          "text": "تماس با ما",
+          "message": "ایمیل: info@example.com"
+        }
       ]
     },
-    "services_menu": {
-      "parent": "main_menu",
-      "text": "بخش خدمات: لطفاً یک سرویس را انتخاب کنید:",
-      "buttons": [
-        [
-          { "text": "طراحی سایت", "action": "reply", "message": "خدمات طراحی سایت تخصصی شامل Node.js و React." },
-          { "text": "ربات تلگرام", "action": "reply", "message": "طراحی انواع ربات‌های متصل به دیتابیس و سرویس‌ها." }
-        ]
+    {
+      "id": "products",
+      "text": "محصولات",
+      "children": [
+        {
+          "id": "product_a",
+          "text": "محصول A",
+          "message": "توضیحات محصول A ...",
+          "children": [
+            {
+              "id": "product_a_price",
+              "text": "قیمت",
+              "message": "قیمت محصول A: ۱۰۰,۰۰۰ تومان"
+            },
+            {
+              "id": "product_a_specs",
+              "text": "مشخصات فنی",
+              "message": "مشخصات فنی محصول A ..."
+            }
+          ]
+        },
+        {
+          "id": "product_b",
+          "text": "محصول B",
+          "message": "توضیحات محصول B ..."
+        }
       ]
     },
-    "about_menu": {
-      "parent": "main_menu",
-      "text": "درباره مجموعه:",
-      "buttons": [
-        [
-          { "text": "اطلاعات شرکت", "action": "reply", "message": "مرکز هوشمندسازی با سال‌ها تجربه در ارائه راهکارهای تحت وب." }
-        ]
-      ]
+    {
+      "id": "quick_hello",
+      "text": "سلام سریع",
+      "message": "سلام به شما! 😄"
     }
-  }
+  ]
 }
