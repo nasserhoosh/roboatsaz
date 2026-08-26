@@ -1,14 +1,14 @@
 // /home/nasser/apps/robotmaker/menuRepository.js
 //
-// لایه‌ی دسترسی به داده: خواندن منوها از جدول bot_menus با Prisma،
-// به‌علاوه کش سبک روی menuIndex ساخته‌شده (چون ساخت ایندکس هر بار گران است
-// ولی محتوای منو بین دو کلیک معمولاً تغییر نمی‌کند).
+// لایه‌ی دسترسی به داده: خواندن منوها از جدول bot_menus با Prisma.
+//
+// عمداً بدون کش: هر فراخوانی مستقیماً از DB می‌خواند تا تغییرات دستی
+// (مثلاً ویرایش menu_json در Adminer) بدون نیاز به ری‌استارت پروسه
+// بلافاصله در ربات اعمال شود. هزینه‌ی این کوئری اضافه ناچیز است، چون
+// هر پیام کاربر در معماری فعلی از قبل حداقل یک کوئری به DB می‌زند.
 
 const { prisma } = require('./db');
 const { buildMenuIndex } = require('./menuLoader');
-
-// کش: menuRowId -> menuIndex (ساختار ایندکس‌شده‌ی همان menuLoader قبلی)
-const menuIndexCache = new Map();
 
 /**
  * لیست منوهای متعلق به یک from_id (برای نمایش لیست انتخاب در /start).
@@ -24,15 +24,10 @@ async function getMenuListForUser(fromId) {
 }
 
 /**
- * گرفتن menuIndex برای یک رکورد خاص (بر اساس id سریال جدول)، با کش.
+ * گرفتن menuIndex برای یک رکورد خاص (بر اساس id سریال جدول)، همیشه تازه از DB.
  * همچنین from_id چک می‌شود تا کاربری منوی متعلق به کاربر دیگر را (با حدس id) نگیرد.
  */
 async function getMenuIndexById(menuRowId, fromId) {
-    const cacheKey = `${menuRowId}`;
-    if (menuIndexCache.has(cacheKey)) {
-        return menuIndexCache.get(cacheKey);
-    }
-
     const row = await prisma.botMenu.findUnique({ where: { id: menuRowId } });
     if (!row || row.fromId !== BigInt(fromId)) {
         return null; // یا وجود ندارد یا متعلق به این کاربر نیست
@@ -42,17 +37,10 @@ async function getMenuIndexById(menuRowId, fromId) {
     menuIndex.menuName = row.menuName;
     menuIndex.menuRowId = row.id;
 
-    menuIndexCache.set(cacheKey, menuIndex);
     return menuIndex;
-}
-
-/** پاک‌سازی کش یک منوی خاص (مثلاً بعد از ویرایش دستی در دیتابیس) */
-function invalidateMenuCache(menuRowId) {
-    menuIndexCache.delete(`${menuRowId}`);
 }
 
 module.exports = {
     getMenuListForUser,
     getMenuIndexById,
-    invalidateMenuCache,
 };

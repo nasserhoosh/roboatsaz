@@ -6,10 +6,17 @@
 const { run } = require('node-telegram-bot-api/node');
 const { initBotWithFallback } = require('./connection');
 const { getMenuListForUser, getMenuIndexById } = require('./menuRepository');
-const { buildKeyboard, buildMenuListKeyboard } = require('./menuRenderer');
+const { getChildrenType, getDisplayText } = require('./menuLoader');
+const {
+    buildKeyboard,
+    buildMenuListKeyboard,
+    buildSoftMenuKeyboard,
+    buildSoftMenuText,
+} = require('./menuRenderer');
 const userState = require('./userState');
 
 const NO_ACCESS_MESSAGE = 'متاسفانه شما به این ربات دسترسی ندارید.';
+const INVALID_SOFT_MENU_INPUT_MESSAGE = '⚠️ عدد واردشده معتبر نیست. لطفاً یکی از شماره‌های لیست را ارسال کنید.';
 
 // ==========================================
 // ۲. توابع کمکی نمایش
@@ -17,7 +24,7 @@ const NO_ACCESS_MESSAGE = 'متاسفانه شما به این ربات دستر
 
 /**
  * نمایش لیست انتخاب منو (سطح بالاتر از همه‌ی منوهای این کاربر).
- * اگر کاربر هیچ منویی نداشته باشد، پیام عدم دسترسی نمایش داده می‌شود.
+ * این سطح همیشه دکمه‌ای است (نه سافت)، چون مفهوم children_type فقط داخل یک منوی JSON معنا دارد.
  * @returns {boolean} true اگر لیست نمایش داده شد، false اگر کاربر دسترسی نداشت
  */
 async function showMenuList(ctx, chatId, fromId) {
@@ -43,12 +50,47 @@ function getNodesForParent(menuIndex, parentId) {
     return (parentNode && Array.isArray(parentNode.children)) ? parentNode.children : [];
 }
 
-/** نمایش یک سطح از منوی داخلی (بعد از انتخاب یک منو از لیست) */
+/**
+ * نمایش یک سطح از منوی داخلی (بعد از انتخاب یک منو از لیست یا هر جابه‌جایی سطح).
+ * بسته به children_type همان سطح، یا کیبورد دکمه‌ای می‌سازد یا لیست عددی (سافت‌منو).
+ */
 async function showMenuLevel(ctx, menuIndex, parentId, promptText) {
     const nodes = getNodesForParent(menuIndex, parentId);
-    const showBack = true; // همیشه در داخل یک منوی انتخاب‌شده دکمه بازگشت داریم
-    const keyboard = buildKeyboard(nodes, showBack, menuIndex.backButtonText);
-    await ctx.reply(promptText, { reply_markup: keyboard });
+    const type = getChildrenType(menuIndex, parentId);
+
+    if (type === 'soft') {
+        const text = buildSoftMenuText(promptText, nodes);
+        const keyboard = buildSoftMenuKeyboard(menuIndex.backButtonText);
+        await ctx.reply(text, { reply_markup: keyboard });
+    } else {
+        const keyboard = buildKeyboard(nodes, true, menuIndex.backButtonText);
+        await ctx.reply(promptText, { reply_markup: keyboard });
+    }
+}
+
+/**
+ * پیدا کردن نودِ انتخاب‌شده توسط کاربر در سطح فعلی، با توجه به نوع سطح (دکمه‌ای یا سافت).
+ * @returns {{node: object|null, invalidSoftInput: boolean}}
+ *   invalidSoftInput یعنی سطح سافت بوده ولی ورودی کاربر عدد معتبر در بازه نبوده.
+ */
+function resolveSelectedNode(menuIndex, currentParentId, text) {
+    const type = getChildrenType(menuIndex, currentParentId);
+    const nodes = getNodesForParent(menuIndex, currentParentId);
+
+    if (type === 'soft') {
+        const trimmed = text.trim();
+        const num = Number(trimmed);
+        const isValidIndex = Number.isInteger(num) && num >= 1 && num <= nodes.length;
+        if (!isValidIndex) {
+            return { node: null, invalidSoftInput: true };
+        }
+        return { node: nodes[num - 1], invalidSoftInput: false };
+    }
+
+    const parentKey = currentParentId === null ? 'root' : currentParentId;
+    const textMap = menuIndex.textIndexByParent.get(parentKey);
+    const node = textMap ? textMap.get(text) : undefined;
+    return { node: node || null, invalidSoftInput: false };
 }
 
 // ==========================================
@@ -82,7 +124,7 @@ async function showMenuLevel(ctx, menuIndex, parentId, promptText) {
         const fromId = ctx.from.id;
         const state = userState.getState(chatId);
 
-        // -------- حالت ۱: کاربر در «لیست انتخاب منو» است --------
+        // -------- حالت ۱: کاربر در «لیست انتخاب منو» است (همیشه دکمه‌ای) --------
         if (state.selectedMenuRowId === null) {
             const menuRows = await getMenuListForUser(fromId);
 
@@ -116,7 +158,7 @@ async function showMenuLevel(ctx, menuIndex, parentId, promptText) {
             return;
         }
 
-        // دکمه بازگشت
+        // دکمه بازگشت (در هر دو نوع سطح - دکمه‌ای یا سافت - همین یک متن است)
         if (text === menuIndex.backButtonText) {
             const stillInsideMenu = userState.popLevel(chatId);
             if (!stillInsideMenu) {
@@ -126,19 +168,27 @@ async function showMenuLevel(ctx, menuIndex, parentId, promptText) {
             const parentId = userState.getCurrentParentId(chatId);
             const promptText = parentId === null
                 ? menuIndex.startMessage
-                : menuIndex.nodesById.get(parentId).text;
+                : getDisplayText(menuIndex.nodesById.get(parentId));
             await showMenuLevel(ctx, menuIndex, parentId, promptText);
             return;
         }
 
-        // دکمه‌ی معمولی داخل منو
+        // انتخاب آیتم داخل سطح فعلی (دکمه‌ای یا عددی، بسته به children_type)
         const currentParentId = userState.getCurrentParentId(chatId);
-        const parentKey = currentParentId === null ? 'root' : currentParentId;
-        const textMap = menuIndex.textIndexByParent.get(parentKey);
-        const node = textMap ? textMap.get(text) : undefined;
+        const { node, invalidSoftInput } = resolveSelectedNode(menuIndex, currentParentId, text);
+
+        if (invalidSoftInput) {
+            await ctx.reply(INVALID_SOFT_MENU_INPUT_MESSAGE);
+            const parentId = currentParentId;
+            const promptText = parentId === null
+                ? menuIndex.startMessage
+                : getDisplayText(menuIndex.nodesById.get(parentId));
+            await showMenuLevel(ctx, menuIndex, parentId, promptText);
+            return;
+        }
 
         if (!node) {
-            // متنی که با هیچ دکمه‌ای در سطح فعلی مطابقت ندارد
+            // متنی که با هیچ دکمه‌ای در سطح فعلی (دکمه‌ای) مطابقت ندارد؛ نادیده گرفته می‌شود
             return;
         }
 
@@ -151,9 +201,9 @@ async function showMenuLevel(ctx, menuIndex, parentId, promptText) {
 
         if (hasChildren) {
             userState.pushLevel(chatId, node.id);
-            await showMenuLevel(ctx, menuIndex, node.id, node.text);
+            await showMenuLevel(ctx, menuIndex, node.id, getDisplayText(node));
         }
-        // اگر نه message دارد و نه children: دکمه بی‌اثر (هشدار در menuLoader هنگام بارگذاری چاپ شده)
+        // اگر نه message دارد و نه children: آیتم بی‌اثر (هشدار در menuLoader هنگام بارگذاری چاپ شده)
     });
 
     // ------------------------------------------
