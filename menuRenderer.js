@@ -30,4 +30,14 @@ function buildKeyboard(nodes, showBackButton, backButtonText) {
     return builder.build({ resize_keyboard: true });
 }
 
-module.exports = { buildKeyboard };
+/**
+ * ساخت reply_markup برای لیست انتخاب منو (سطح بالاتر از همه‌ی منوهای یک کاربر).
+ * ورودی رکوردهای جدول bot_menus است (هر رکورد یک دکمه با متن menuName).
+ * دکمه بازگشتی در این سطح معنا ندارد چون بالاترین سطح است.
+ */
+function buildMenuListKeyboard(menuRows) {
+    const pseudoNodes = menuRows.map((row) => ({ text: row.menuName }));
+    return buildKeyboard(pseudoNodes, false, null);
+}
+
+module.exports = { buildKeyboard, buildMenuListKeyboard };

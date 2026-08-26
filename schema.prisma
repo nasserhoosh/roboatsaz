@@ -1,0 +1,27 @@
+// /home/nasser/apps/robotmaker/prisma/schema.prisma
+//
+// این اسکیما دقیقاً روی جدول موجود bot_menus نگاشت می‌شود.
+// جدول از قبل با psql ساخته شده؛ نیازی به migration نیست،
+// فقط کافیست `npx prisma generate` اجرا شود تا کلاینت تایپ‌شده ساخته شود.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BotMenu {
+  id               Int      @id @default(autoincrement())
+  fromId           BigInt   @map("from_id")
+  menuName         String   @map("menu_name")
+  menuDescription  String?  @map("menu_description")
+  menuJson         Json     @map("menu_json")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([fromId, menuName], name: "from_id_menu_name")
+  @@map("bot_menus")
+}
