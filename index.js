@@ -7,9 +7,9 @@ const { run } = require('node-telegram-bot-api/node');
 const { initBotWithFallback } = require('./connection');
 const { getMenuListForUser, getMenuIndexById } = require('./menuRepository');
 const { getChildrenType, getDisplayText } = require('./menuLoader');
+const { buildRootMenuIndex, MY_BOTS_NODE_ID, CREATE_BOT_NODE_ID } = require('./rootMenuLoader');
 const {
     buildKeyboard,
-    buildMenuListKeyboard,
     buildSoftMenuKeyboard,
     buildSoftMenuText,
     buildRequestContactKeyboard,
@@ -19,7 +19,6 @@ const {
 const userState = require('./userState');
 const profileRepository = require('./profileRepository');
 const {
-    CREATE_BOT_BUTTON_TEXT,
     REQUEST_CONTACT_BUTTON_TEXT,
     CONFIRM_BUTTON_TEXT,
     PHONE_SHARE_INSTRUCTION_PHOTO_FILE_ID,
@@ -28,6 +27,8 @@ const {
     buildConfirmationMessage,
     buildGatewayLinkMessage,
 } = require('./onboardingConfig');
+
+const BOT_NODE_ID_PREFIX = 'bot_'; // پیشوندی که rootMenuLoader برای id هر ربات در سافت‌منوی «ربات‌های من» می‌سازد
 
 const INVALID_SOFT_MENU_INPUT_MESSAGE = '⚠️ عدد واردشده معتبر نیست. لطفاً یکی از شماره‌های لیست را ارسال کنید.';
 const BACK_BUTTON_TEXT = '🔙 بازگشت'; // دکمه‌ی بازگشتِ سراسری (خارج از یک منوی مشخص - مثلاً در onboarding)
@@ -65,22 +66,23 @@ function withTimeout(promise, ms, label) {
 // ==========================================
 
 /**
- * نمایش لیست انتخاب منو (سطح بالاتر از همه‌ی منوهای این کاربر)، به‌همراه دکمه‌ی «ایجاد ربات».
- * این سطح همیشه دکمه‌ای است (نه سافت)، چون مفهوم children_type فقط داخل یک منوی JSON معنا دارد.
- * برخلاف قبل، کاربر بدون منو هم همین لیست را می‌بیند (فقط با دکمه‌ی «ایجاد ربات»)،
- * نه پیام «دسترسی ندارید».
+ * نمایش منوی ریشه (از root_menu.json، به‌همراه لیست پویا در سافت‌منوی «ربات‌های من»).
+ * جایگزین showMenuList قبلی؛ به‌جای لیست تخت bot_menus، از موتور کامل menuLoader
+ * (دکمه‌ای + سافت‌منو + آیکون) برای خودِ ریشه هم استفاده می‌کند.
  */
-async function showMenuList(ctx, chatId, fromId) {
-    const menuRows = await getMenuListForUser(fromId);
-
+async function showRootMenu(ctx, chatId, fromId) {
+    const rootMenuIndex = await buildFreshRootMenuIndex(fromId);
     userState.resetToMenuList(chatId);
-    const keyboard = buildMenuListKeyboard(menuRows, CREATE_BOT_BUTTON_TEXT);
+    await showMenuLevel(ctx, rootMenuIndex, null, rootMenuIndex.startMessage);
+}
 
-    const promptText = menuRows.length > 0
-        ? 'لطفاً یکی از منوهای زیر را انتخاب کنید:'
-        : 'برای شروع، روی «🤖 ایجاد ربات» بزنید.';
-
-    await ctx.reply(promptText, { reply_markup: keyboard });
+/**
+ * ساخت rootMenuIndex تازه (لیست ربات‌های کاربر همیشه fresh از DB خوانده می‌شود،
+ * دقیقاً مثل getMenuIndexById برای منوهای معمولی - بدون کش، تا تغییرات فوری دیده شوند).
+ */
+async function buildFreshRootMenuIndex(fromId) {
+    const menuRows = await getMenuListForUser(fromId);
+    return buildRootMenuIndex(menuRows);
 }
 
 /** برگرداندن لیست نودهای یک سطح خاص از یک menuIndex مشخص */
@@ -229,7 +231,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
     userState.endOnboarding(chatId);
 
     await ctx.reply(buildGatewayLinkMessage(profile.id));
-    await showMenuList(ctx, chatId, fromId);
+    await showRootMenu(ctx, chatId, fromId);
 }
 
 // ==========================================
@@ -271,7 +273,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
             const chatId = ctx.chat.id;
             const fromId = ctx.from.id;
             await profileRepository.upsertTelegramInfo(fromId, ctx.from);
-            await showMenuList(ctx, chatId, fromId);
+            await showRootMenu(ctx, chatId, fromId);
         } catch (err) {
             await reportError(ctx, '/start', err);
         }
@@ -303,20 +305,13 @@ async function handleConfirmation(ctx, chatId, fromId) {
 
             console.log(`[text handler] chatId=${chatId} fromId=${fromId} text=${JSON.stringify(text)}`);
 
-            // دکمه‌ی «ایجاد ربات» از هرجای منوی ریشه قابل کلیک است
-            if (text === CREATE_BOT_BUTTON_TEXT) {
-                console.log('[text handler] matched CREATE_BOT_BUTTON_TEXT');
-                await handleCreateBotButton(ctx, chatId, fromId);
-                return;
-            }
-
             // -------- حالت صفر: کاربر در وسط فلوی onboarding است --------
             if (userState.isOnboarding(chatId)) {
                 const step = userState.getOnboardingStep(chatId);
 
                 if (text === BACK_BUTTON_TEXT) {
                     userState.endOnboarding(chatId);
-                    await showMenuList(ctx, chatId, fromId);
+                    await showRootMenu(ctx, chatId, fromId);
                     return;
                 }
 
@@ -344,32 +339,70 @@ async function handleConfirmation(ctx, chatId, fromId) {
 
             const state = userState.getState(chatId);
 
-            // -------- حالت ۱: کاربر در «لیست انتخاب منو» است (همیشه دکمه‌ای) --------
+            // -------- حالت ۱: کاربر در منوی ریشه است (root_menu.json + سافت‌منوی «ربات‌های من») --------
             if (state.selectedMenuRowId === null) {
-                const menuRows = await getMenuListForUser(fromId);
+                const rootMenuIndex = await buildFreshRootMenuIndex(fromId);
+                const currentParentId = userState.getCurrentParentId(chatId);
 
-                const chosenRow = menuRows.find((row) => row.menuName === text);
-                if (!chosenRow) {
-                    // متنی که با هیچ نام منویی مطابقت ندارد؛ نادیده گرفته می‌شود
+                // دکمه بازگشت در سطوح داخلی منوی ریشه (مثلاً داخل سافت‌منوی «ربات‌های من»)
+                if (text === rootMenuIndex.backButtonText && currentParentId !== null) {
+                    const stillInside = userState.popLevel(chatId);
+                    const parentId = stillInside ? userState.getCurrentParentId(chatId) : null;
+                    const promptText = parentId === null
+                        ? rootMenuIndex.startMessage
+                        : getDisplayText(rootMenuIndex.nodesById.get(parentId));
+                    await showMenuLevel(ctx, rootMenuIndex, parentId, promptText);
                     return;
                 }
 
-                const menuIndex = await getMenuIndexById(chosenRow.id, fromId);
-                if (!menuIndex) {
-                    await showMenuList(ctx, chatId, fromId);
+                const { node, invalidSoftInput } = resolveSelectedNode(rootMenuIndex, currentParentId, text);
+
+                if (invalidSoftInput) {
+                    await ctx.reply(INVALID_SOFT_MENU_INPUT_MESSAGE);
+                    const promptText = currentParentId === null
+                        ? rootMenuIndex.startMessage
+                        : getDisplayText(rootMenuIndex.nodesById.get(currentParentId));
+                    await showMenuLevel(ctx, rootMenuIndex, currentParentId, promptText);
                     return;
                 }
 
-                userState.selectMenu(chatId, chosenRow.id);
-                await showMenuLevel(ctx, menuIndex, null, menuIndex.startMessage);
+                if (!node) return; // متن نامرتبط در سطح ریشه؛ نادیده گرفته می‌شود
+
+                // دکمه‌ی ویژه: ایجاد ربات
+                if (node.id === CREATE_BOT_NODE_ID) {
+                    await handleCreateBotButton(ctx, chatId, fromId);
+                    return;
+                }
+
+                // انتخاب یک ربات واقعی از سافت‌منوی «ربات‌های من»
+                if (node.id.startsWith(BOT_NODE_ID_PREFIX)) {
+                    const botRowId = Number(node.id.slice(BOT_NODE_ID_PREFIX.length));
+                    const menuIndex = await getMenuIndexById(botRowId, fromId);
+                    if (!menuIndex) {
+                        await showRootMenu(ctx, chatId, fromId);
+                        return;
+                    }
+                    userState.selectMenu(chatId, botRowId);
+                    await showMenuLevel(ctx, menuIndex, null, menuIndex.startMessage);
+                    return;
+                }
+
+                // دکمه‌ی معمولی دیگر از root_menu.json (مثلاً پرداخت/راهنما در آینده): فقط پیام دارد یا زیرمنوی استاتیک
+                const hasMessage = typeof node.message === 'string' && node.message.length > 0;
+                const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+                if (hasMessage) await ctx.reply(node.message);
+                if (hasChildren) {
+                    userState.pushLevel(chatId, node.id);
+                    await showMenuLevel(ctx, rootMenuIndex, node.id, getDisplayText(node));
+                }
                 return;
             }
 
-            // -------- حالت ۲: کاربر داخل یک منوی مشخص است --------
+            // -------- حالت ۲: کاربر داخل یک منوی مشخص (bot_menus) است --------
             const menuIndex = await getMenuIndexById(state.selectedMenuRowId, fromId);
             if (!menuIndex) {
-                // منو دیگر در دسترس نیست (مثلاً حذف شده) -> بازگشت به لیست
-                await showMenuList(ctx, chatId, fromId);
+                // منو دیگر در دسترس نیست (مثلاً حذف شده) -> بازگشت به منوی ریشه
+                await showRootMenu(ctx, chatId, fromId);
                 return;
             }
 
@@ -377,7 +410,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
             if (text === menuIndex.backButtonText) {
                 const stillInsideMenu = userState.popLevel(chatId);
                 if (!stillInsideMenu) {
-                    await showMenuList(ctx, chatId, fromId);
+                    await showRootMenu(ctx, chatId, fromId);
                     return;
                 }
                 const parentId = userState.getCurrentParentId(chatId);

@@ -1,0 +1,31 @@
+{
+  "start_message": "خوش آمدید! 👋\nاز دکمه‌های زیر یکی را انتخاب کنید:",
+  "back_button_text": "🔙 بازگشت",
+  "root_children_type": "buttons",
+  "menu": [
+    {
+      "id": "create_bot",
+      "icon": "🤖",
+      "text": "ایجاد ربات"
+    },
+    {
+      "id": "my_bots",
+      "icon": "📋",
+      "text": "ربات‌های من",
+      "children_type": "soft",
+      "children": []
+    },
+     {
+      "id": "credit",
+      "icon": "💳",
+      "text": "پرداخت",
+      "message": "به شماره 123456789 پرداخت کنید"
+    },
+       {
+      "id": "manual",
+      "icon": "ℹ️",
+      "text": "راهنما",
+      "message": "به ربات ربات ساز خوش آمدید ، ابتدا ربات خود را بسازید سپس پرداخت کنید"
+    }
+  ]
+}
