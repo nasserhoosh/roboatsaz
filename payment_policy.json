@@ -1,0 +1,18 @@
+{
+  "coin_to_rial_rate": 50000,
+  "bot_cost_coins": 1,
+  "max_bots_per_user": 5,
+  "min_topup_coins": 1,
+  "welcome_gift_coins": 2,
+  "bank_account": {
+    "card_number": "6037-XXXX-XXXX-XXXX",
+    "owner_name": "نام صاحب حساب"
+  },
+  "seasonal_gift": {
+    "enabled": false,
+    "coins": 0,
+    "starts_at": null,
+    "ends_at": null,
+    "label": ""
+  }
+}

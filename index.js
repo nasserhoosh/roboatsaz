@@ -18,6 +18,8 @@ const {
 } = require('./menuRenderer');
 const userState = require('./userState');
 const profileRepository = require('./profileRepository');
+const walletRepository = require('./walletRepository');
+const { loadPaymentPolicy } = require('./paymentPolicy');
 const {
     REQUEST_CONTACT_BUTTON_TEXT,
     CONFIRM_BUTTON_TEXT,
@@ -227,6 +229,12 @@ async function handleConfirmation(ctx, chatId, fromId) {
 
     await profileRepository.saveFullName(fromId, fullName);
     const profile = await profileRepository.markProfileCompleted(fromId);
+
+    // هدیه‌ی خوش‌آمد یک‌بار برای کاربر تازه‌وارد (فقط همین‌جا، چون تکمیل پروفایل هم فقط یک‌بار رخ می‌دهد)
+    const policy = loadPaymentPolicy();
+    if (policy.welcome_gift_coins > 0) {
+        await walletRepository.creditWallet(fromId, policy.welcome_gift_coins);
+    }
 
     userState.endOnboarding(chatId);
 
