@@ -1,8 +1,25 @@
 // /home/nasser/apps/robotmaker/walletRepository.js
 //
 // دسترسی به جدول‌های wallets و payments.
+//
+// payments هم شارژهای کیف‌پول (type='topup') و هم کسر بابت ثبت اولین توکن ربات
+// (type='bot_token_charge') را نگه می‌دارد؛ coinsDelta برای شارژ مثبت و برای
+// کسر توکن منفی است - این یک منبع واحد برای کل تاریخچه‌ی تراکنش‌های کاربر می‌سازد.
+//
+// هر پرداخت (از هر نوع) یک trackingCode یکتای ۸ کاراکتری الفبایی-عددی دارد که
+// در همه‌ی حالت‌ها (موفق/لغوشده/منقضی‌شده) به کاربر نمایش داده می‌شود.
+//
+// نکته‌ی مهم: PENDING_EXPIRY_MS تنها منبع مدت انقضای pending در کل پروژه است؛
+// هر جای دیگری (مثلاً routes/api.js) که به این مقدار نیاز دارد باید همین
+// export را import کند، نه اینکه عدد را جداگانه هاردکد کند - وگرنه تغییر این
+// مقدار در یک فایل و نه فایل دیگر باعث ناهماهنگی (دقیقاً همان باگی که رخ داد) می‌شود.
 
 const { prisma } = require('./db');
+
+const PENDING_EXPIRY_MS = 5 * 60 * 1000; // ۵ دقیقه - تنها محل تعریف این مقدار در کل پروژه
+
+const TRACKING_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون حروف/ارقام مشابه‌الشکل (O/0, I/1)
+const TRACKING_CODE_LENGTH = 8;
 
 /** گرفتن یا ساختن کیف‌پول کاربر (اگر وجود نداشت، با موجودی صفر ساخته می‌شود). */
 async function getOrCreateWallet(fromId) {
@@ -40,6 +57,24 @@ async function debitWalletIfSufficient(fromId, coins) {
     return result > 0; // تعداد ردیف‌های تغییریافته - اگر ۰ بود یعنی موجودی کافی نبود یا کیف‌پول وجود نداشت
 }
 
+/** منقضی‌کردن pending هایی که بیش از PENDING_EXPIRY_MS از ساختشان گذشته (فقط برای همین کاربر - ارزان و کافی). */
+async function expireStalePendingPayments(fromId) {
+    const cutoff = new Date(Date.now() - PENDING_EXPIRY_MS);
+    await prisma.payment.updateMany({
+        where: { fromId: BigInt(fromId), status: 'pending', type: 'topup', createdAt: { lt: cutoff } },
+        data: { status: 'expired' },
+    });
+}
+
+/** آیا کاربر یک درخواست شارژ pending (غیرمنقضی) فعال دارد؟ */
+async function getActivePendingTopup(fromId) {
+    await expireStalePendingPayments(fromId);
+    return prisma.payment.findFirst({
+        where: { fromId: BigInt(fromId), status: 'pending', type: 'topup' },
+        orderBy: { createdAt: 'desc' },
+    });
+}
+
 /**
  * ساخت یک کد ۳ رقمی که در بین پرداخت‌های pending فعلی تکراری نباشد.
  * ابتدا چند تلاش تصادفی سریع (حالت معمول، بدون کوئری سنگین)؛ اگر همه شکست خورد
@@ -70,22 +105,79 @@ async function generateUniqueVerifyCode() {
     throw new Error('امکان تولید کد یکتای پرداخت وجود ندارد (همه‌ی ۱۰۰۰ حالت در حال استفاده است).');
 }
 
-/** ساخت یک درخواست پرداخت (شارژ) جدید. */
-async function createPaymentRequest(fromId, coinsRequested, amountRial) {
+/** ساخت یک کد رهگیری ۸ کاراکتری الفبایی-عددی که در کل جدول payments یکتا باشد. */
+async function generateUniqueTrackingCode() {
+    const MAX_ATTEMPTS = 20;
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        let code = '';
+        for (let j = 0; j < TRACKING_CODE_LENGTH; j++) {
+            code += TRACKING_CODE_CHARS[Math.floor(Math.random() * TRACKING_CODE_CHARS.length)];
+        }
+        const existing = await prisma.payment.findUnique({ where: { trackingCode: code } });
+        if (!existing) return code;
+    }
+    throw new Error('امکان تولید کد رهگیری یکتا وجود ندارد.');
+}
+
+/**
+ * ساخت یک درخواست پرداخت (شارژ) جدید.
+ * @returns {{success: boolean, payment?: object, reason?: string}}
+ */
+async function createPaymentRequest(fromId, coins, amountRial) {
+    const activePending = await getActivePendingTopup(fromId);
+    if (activePending) {
+        return { success: false, reason: 'شما یک درخواست شارژ در انتظار پرداخت دارید. ابتدا آن را لغو کنید یا پرداخت را تکمیل کنید.' };
+    }
+
     const verifyPayment = await generateUniqueVerifyCode();
-    return prisma.payment.create({
+    const trackingCode = await generateUniqueTrackingCode();
+    const payment = await prisma.payment.create({
         data: {
             fromId: BigInt(fromId),
             amountRial: BigInt(amountRial),
             verifyPayment,
-            coinsRequested,
+            coinsDelta: coins,
             status: 'pending',
+            type: 'topup',
+            trackingCode,
+        },
+    });
+    return { success: true, payment };
+}
+
+/**
+ * لغو دستی یک درخواست شارژ pending توسط خودِ کاربر.
+ * @returns {{success: boolean, payment?: object}}
+ */
+async function cancelPendingTopup(fromId, paymentId) {
+    const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment || payment.fromId !== BigInt(fromId) || payment.status !== 'pending' || payment.type !== 'topup') {
+        return { success: false };
+    }
+    const updated = await prisma.payment.update({ where: { id: paymentId }, data: { status: 'expired' } });
+    return { success: true, payment: updated };
+}
+
+/** ثبت یک تراکنش کسر اعتبار بابت اولین ثبت توکن ربات (برای درج در تاریخچه‌ی یکپارچه). */
+async function recordBotTokenCharge(fromId, coins) {
+    const trackingCode = await generateUniqueTrackingCode();
+    return prisma.payment.create({
+        data: {
+            fromId: BigInt(fromId),
+            amountRial: 0n,
+            verifyPayment: '---',
+            coinsDelta: -Math.abs(coins),
+            status: 'confirmed',
+            type: 'bot_token_charge',
+            trackingCode,
+            confirmedAt: new Date(),
         },
     });
 }
 
-/** لیست تاریخچه‌ی پرداخت‌های یک کاربر (جدیدترین اول). */
+/** لیست تاریخچه‌ی کامل تراکنش‌های یک کاربر (شارژ + کسر توکن)، جدیدترین اول. */
 async function getPaymentHistory(fromId) {
+    await expireStalePendingPayments(fromId);
     return prisma.payment.findMany({
         where: { fromId: BigInt(fromId) },
         orderBy: { createdAt: 'desc' },
@@ -108,27 +200,39 @@ async function confirmPaymentByAmount(totalAmountRial) {
     const baseAmount = amount - BigInt(verifyCode);
 
     const payment = await prisma.payment.findFirst({
-        where: { verifyPayment: verifyCode, status: 'pending', amountRial: baseAmount },
+        where: { verifyPayment: verifyCode, status: 'pending', amountRial: baseAmount, type: 'topup' },
     });
 
     if (!payment) {
         return { success: false, reason: 'هیچ پرداخت در انتظاری با این مشخصات یافت نشد.' };
     }
 
-    await prisma.payment.update({
+    const updated = await prisma.payment.update({
         where: { id: payment.id },
         data: { status: 'confirmed', confirmedAt: new Date() },
     });
-    await creditWallet(payment.fromId, payment.coinsRequested);
+    await creditWallet(payment.fromId, payment.coinsDelta);
 
-    return { success: true, payment };
+    return { success: true, payment: updated };
+}
+
+/** گرفتن یک پرداخت با شناسه، فقط اگر متعلق به همان کاربر باشد (برای نمایش نتیجه‌ی نهایی به فرانت). */
+async function getPaymentForUser(fromId, paymentId) {
+    const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment || payment.fromId !== BigInt(fromId)) return null;
+    return payment;
 }
 
 module.exports = {
+    PENDING_EXPIRY_MS,
     getOrCreateWallet,
     creditWallet,
     debitWalletIfSufficient,
+    getActivePendingTopup,
     createPaymentRequest,
+    cancelPendingTopup,
+    recordBotTokenCharge,
     getPaymentHistory,
     confirmPaymentByAmount,
+    getPaymentForUser,
 };

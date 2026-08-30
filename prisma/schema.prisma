@@ -53,14 +53,16 @@ model Wallet {
 }
 
 model Payment {
-  id              Int       @id @default(autoincrement())
-  fromId          BigInt    @map("from_id")
-  amountRial      BigInt    @map("amount_rial")
-  verifyPayment   String    @map("verify_payment")
-  coinsRequested  Int       @map("coins_requested")
-  status          String    @default("pending")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  confirmedAt     DateTime? @map("confirmed_at") @db.Timestamptz
+  id            Int       @id @default(autoincrement())
+  fromId        BigInt    @map("from_id")
+  amountRial    BigInt    @map("amount_rial")
+  verifyPayment String    @map("verify_payment")
+  coinsDelta    Int       @map("coins_delta")
+  status        String    @default("pending")
+  type          String    @default("topup")
+  trackingCode  String?   @unique @map("tracking_code")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  confirmedAt   DateTime? @map("confirmed_at") @db.Timestamptz
 
   @@map("payments")
 }
