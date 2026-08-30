@@ -3,7 +3,7 @@
 // ==========================================
 // ۱. ورود کتابخانه‌ها و ماژول‌های اتصال/منو/دیتابیس/پروفایل
 // ==========================================
-const { run } = require('node-telegram-bot-api');
+const { run } = require('node-telegram-bot-api/node');
 const { initBotWithFallback } = require('./connection');
 const { getMenuListForUser, getMenuIndexById } = require('./menuRepository');
 const { getChildrenType, getDisplayText } = require('./menuLoader');
