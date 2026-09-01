@@ -64,6 +64,129 @@ function withTimeout(promise, ms, label) {
 }
 
 // ==========================================
+// ۱.۵. گزارش پیام‌ها به n8n (Webhook)
+// ==========================================
+// نکته: همه‌ی اطلاعاتی که در دسترس است در extra گذاشته می‌شود (جامع)؛
+// حذف/فیلتر فیلدهای غیرضروری بعداً در سمت n8n انجام می‌شود، نه اینجا.
+const N8N_REPORT_WEBHOOK_URL = process.env.N8N_REPORT_WEBHOOK_URL || '';
+const N8N_REPORT_BASIC_AUTH_USER = process.env.N8N_REPORT_BASIC_AUTH_USER || '';
+const N8N_REPORT_BASIC_AUTH_PASS = process.env.N8N_REPORT_BASIC_AUTH_PASS || '';
+const N8N_REPORT_TIMEOUT_MS = parseInt(process.env.N8N_REPORT_TIMEOUT_MS || '5000', 10);
+
+// نکته‌ی مهم: این سرور ممکن است اصلاً مسیر مستقیم به اینترنت نداشته باشد و initBotWithFallback
+// در connection.js با setGlobalDispatcher یک پروکسیِ کارا را به‌عنوان دیسپچرِ سراسریِ undici ثبت کرده باشد.
+// قبلاً سعی کردیم گزارش‌ها را عمداً «مستقیم» (بدون پروکسی) بفرستیم که باعث ETIMEDOUT شد، چون
+// اصلاً مسیر مستقیمی وجود ندارد. پس برعکس: از همان دیسپچرِ سراسریِ برنده (هرچه که initBotWithFallback
+// انتخاب کرده) استفاده می‌کنیم - همان مسیری که ثابت شده به اینترنت وصل می‌شود.
+const { getGlobalDispatcher } = require('undici');
+
+// آخرین fromId شناخته‌شده به ازای هر chatId (برای این‌که پیام‌های خروجیِ ربات هم بتوانند
+// فرستنده‌ی اصلیِ مکالمه را در extra گزارش کنند، چون ctx.api.sendMessage خودش fromId ندارد).
+const lastFromIdByChat = new Map();
+// آخرین اطلاعات from (شیء کامل ctx.from تلگرام) به ازای هر chatId
+const lastFromInfoByChat = new Map();
+
+/**
+ * ارسال گزارش یک پیام (از کاربر یا از ربات) به وبهوک n8n.
+ * این تابع هرگز نباید جریان اصلی ربات را مختل کند؛ خطاهای آن فقط لاگ می‌شوند (fire-and-forget-safe).
+ *
+ * @param {'user'|'bot'} direction - جهت پیام: از کاربر به ربات، یا از ربات به کاربر
+ * @param {number|string} chatId
+ * @param {number|string|null} fromId - آیدی کاربر تلگرام مرتبط با این مکالمه
+ * @param {string} text - متن پیام (یا کپشن/توضیح، برای پیام‌های غیرمتنی)
+ * @param {object} [extra] - هر اطلاعات اضافی موجود (خام از تلگرام)؛ عمداً محدود نشده تا چیزی جا نماند
+ */
+async function reportMessageToN8n(direction, chatId, fromId, text, extra = {}) {
+    if (!N8N_REPORT_WEBHOOK_URL) return;
+
+    const payload = {
+        direction,           // 'user' یا 'bot'
+        chatId,
+        fromId: fromId ?? null,
+        text: text ?? '',
+        timestamp: new Date().toISOString(),
+        botUsername: process.env.BOT_USERNAME || undefined,
+        extra,
+    };
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (N8N_REPORT_BASIC_AUTH_USER || N8N_REPORT_BASIC_AUTH_PASS) {
+            const token = Buffer.from(`${N8N_REPORT_BASIC_AUTH_USER}:${N8N_REPORT_BASIC_AUTH_PASS}`).toString('base64');
+            headers['Authorization'] = `Basic ${token}`;
+        }
+
+        await withTimeout(
+            fetch(N8N_REPORT_WEBHOOK_URL, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(payload),
+                dispatcher: getGlobalDispatcher(), // همان مسیر برنده‌ی initBotWithFallback (مستقیم یا پروکسی)
+            }),
+            N8N_REPORT_TIMEOUT_MS,
+            'reportMessageToN8n'
+        );
+    } catch (err) {
+        // گزارش هرگز نباید ربات را از کار بیندازد؛ فقط لاگ می‌کنیم.
+        console.error('Failed to report message to n8n:', err);
+    }
+}
+
+/**
+ * نصب گزارش‌گیریِ خودکارِ پیام‌های خروجیِ ربات، با پچ‌کردنِ متدهای bot.api.
+ * این کار یک‌بار روی شیء api انجام می‌شود، پس نیازی نیست تک‌تک ctx.reply / ctx.api.sendPhoto
+ * در کدهای بالا دستکاری شوند؛ ctx.reply و ctx.api هر دو از همین bot.api عبور می‌کنند.
+ */
+function installOutgoingMessageReporting(bot) {
+    const api = bot.api;
+
+    const originalSendMessage = api.sendMessage.bind(api);
+    api.sendMessage = async (...args) => {
+        const result = await originalSendMessage(...args);
+
+        // این فریم‌ورک ممکن است sendMessage را به دو شکل صدا بزند:
+        // ۱) یک آبجکت واحد: sendMessage({ chat_id, text, reply_markup, ... })  (مثل sendPhoto در همین فایل)
+        // ۲) سه آرگومان جدا: sendMessage(chatId, text, options)
+        // برای اینکه هرکدام بود درست گزارش شود، هر دو حالت را تشخیص می‌دهیم.
+        let chatId, text, other;
+        if (args.length === 1 && args[0] && typeof args[0] === 'object') {
+            const params = args[0];
+            chatId = params.chat_id ?? params.chatId;
+            text = params.text;
+            other = params;
+        } else {
+            [chatId, text, other] = args;
+        }
+
+        reportMessageToN8n('bot', chatId, lastFromIdByChat.get(String(chatId)) ?? null, text, {
+            method: 'sendMessage',
+            telegramMessageId: result && result.message_id,
+            replyMarkup: other && other.reply_markup,
+            parseMode: other && other.parse_mode,
+            recipient: lastFromInfoByChat.get(String(chatId)),
+            rawArgs: args,
+            rawResult: result,
+        });
+        return result;
+    };
+
+    const originalSendPhoto = api.sendPhoto.bind(api);
+    api.sendPhoto = async (args) => {
+        const result = await originalSendPhoto(args);
+        reportMessageToN8n('bot', args.chat_id, lastFromIdByChat.get(String(args.chat_id)) ?? null, args.caption || '', {
+            method: 'sendPhoto',
+            photo: args.photo,
+            telegramMessageId: result && result.message_id,
+            replyMarkup: args.reply_markup,
+            recipient: lastFromInfoByChat.get(String(args.chat_id)),
+            rawArgs: args,
+            rawResult: result,
+        });
+        return result;
+    };
+}
+
+// ==========================================
 // ۲. توابع کمکی نمایش منو (بدون تغییر نسبت به قبل)
 // ==========================================
 
@@ -253,9 +376,14 @@ async function handleConfirmation(ctx, chatId, fromId) {
         process.exit(1);
     }
 
+    // نصب گزارش‌گیریِ پیام‌های خروجیِ ربات (ctx.reply / ctx.api.sendPhoto) قبل از هر هندلری،
+    // تا هیچ پیام خروجی‌ای از قلم نیفتد.
+    installOutgoingMessageReporting(bot);
+
     // ------------------------------------------
     // میدل‌ور تشخیصی سراسری: هر آپدیت دریافتی را قبل از هر پردازشی لاگ می‌کند،
     // تا مشخص شود آیا polling اصلاً پیام‌ها را دریافت می‌کند یا نه.
+    // همچنین همین‌جا پیام‌های ورودیِ کاربر به n8n گزارش می‌شوند (جامع، با تمام اطلاعات from/message).
     // ------------------------------------------
     bot.use(async (ctx, next) => {
         console.log('[incoming update]', JSON.stringify({
@@ -265,6 +393,31 @@ async function handleConfirmation(ctx, chatId, fromId) {
             chatId: ctx.chat && ctx.chat.id,
             fromId: ctx.from && ctx.from.id,
         }));
+
+        if (ctx.message && ctx.chat && ctx.from) {
+            const chatId = ctx.chat.id;
+            const fromId = ctx.from.id;
+
+            // به‌روزرسانی نگاشتِ chatId -> fromId/from، تا گزارش پیام‌های خروجیِ ربات هم بتواند
+            // فرستنده‌ی مکالمه را مشخص کند.
+            lastFromIdByChat.set(String(chatId), fromId);
+            lastFromInfoByChat.set(String(chatId), ctx.from);
+
+            const messageText = ctx.message.text
+                ?? (ctx.message.contact ? '[contact shared]' : '[non-text message]');
+
+            reportMessageToN8n('user', chatId, fromId, messageText, {
+                messageId: ctx.message.message_id,
+                date: ctx.message.date,
+                chatType: ctx.chat.type,
+                from: ctx.from, // شیء کامل تلگرام: id, is_bot, first_name, last_name, username, language_code, ...
+                chat: ctx.chat, // شیء کامل چت
+                contact: ctx.message.contact || undefined,
+                entities: ctx.message.entities || undefined,
+                rawMessage: ctx.message,
+            });
+        }
+
         try {
             await next();
         } catch (err) {

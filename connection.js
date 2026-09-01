@@ -18,6 +18,9 @@ const proxyList = rawProxies
     .filter(Boolean)
     .map(p => p.startsWith('http') ? p : `http://${p}`);
 
+// تایم‌اوت برای تست اتصال (بر حسب میلی‌ثانیه)
+const PROXY_TEST_TIMEOUT_MS = parseInt(process.env.PROXY_TEST_TIMEOUT_MS || '8000', 10);
+
 // ==========================================
 // ۲. تابع ارزیابی اتصالات (مستقیم + لیست پروکسی‌ها)
 // ==========================================
@@ -31,7 +34,11 @@ async function initBotWithFallback() {
         setGlobalDispatcher(defaultDispatcher);
 
         const tempBot = new Bot(token);
-        const me = await tempBot.api.getMe();
+        const me = await withTimeout(
+            tempBot.api.getMe(),
+            PROXY_TEST_TIMEOUT_MS,
+            'direct connection'
+        );
 
         console.log(`✅ اتصال مستقیم موفقیت‌آمیز بود! نام ربات: @${me.username}`);
         return tempBot;
@@ -54,7 +61,11 @@ async function initBotWithFallback() {
             setGlobalDispatcher(proxyAgent);
 
             const tempBot = new Bot(token);
-            const me = await tempBot.api.getMe();
+            const me = await withTimeout(
+                tempBot.api.getMe(),
+                PROXY_TEST_TIMEOUT_MS,
+                `proxy ${proxyUrl}`
+            );
 
             console.log(`✅ اتصال موفق با پروکسی ${proxyUrl}! نام ربات: @${me.username}`);
             return tempBot;
@@ -67,6 +78,19 @@ async function initBotWithFallback() {
     setGlobalDispatcher(defaultDispatcher);
     console.error('❌ تمامی مسیرهای اتصال (مستقیم و لیست پروکسی‌ها) با خطا مواجه شدند.');
     return null;
+}
+
+/**
+ * اجرای یک پرامیس با سقف زمانی؛ اگر ظرف مدت مشخص resolve/reject نشود،
+ * خودش reject می‌کند تا هیچ عملیاتی بی‌صدا و بی‌نهایت معلق نماند.
+ */
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms)
+        ),
+    ]);
 }
 
 // ==========================================
