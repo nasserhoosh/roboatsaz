@@ -8,7 +8,7 @@ const CONFIRM_BUTTON_TEXT = '✅ تأیید';
 
 // file_id عکس دستورالعمل اشتراک‌گذاری شماره تلفن (از تلگرام گرفته شده).
 const PHONE_SHARE_INSTRUCTION_PHOTO_FILE_ID =
-    'AgACAgQAAxkBAAICQGqJarjEZMyQ5z1XCHtcssVAFo4VAAKvEGsbhbpIUM2mevXiZTPxAQADAgADeAADPQQ';
+    'https://sorat.top/photos/onboarding.jpg';
 
 const PHONE_SHARE_INSTRUCTION_CAPTION =
     'برای ادامه، لطفاً شماره تلفن خود را با استفاده از دکمه‌ی زیر به اشتراک بگذارید.';

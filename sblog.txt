@@ -1,0 +1,21 @@
+● sing-box.service - sing-box service
+     Loaded: loaded (/usr/lib/systemd/system/sing-box.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-09-07 15:06:33 UTC; 16min ago
+       Docs: https://sing-box.sagernet.org
+   Main PID: 4030283 (sing-box)
+      Tasks: 8 (limit: 3482)
+     Memory: 7.8M (peak: 8.3M)
+        CPU: 541ms
+     CGroup: /system.slice/sing-box.service
+             └─4030283 /usr/bin/sing-box -D /var/lib/sing-box -C /etc/sing-box run
+
+Sep 07 15:20:34 sorat-server sing-box[4030283]: INFO[0841] [147417877 10ms] outbound/vless[proxy]: outbound connection to api.telegram.org:443
+Sep 07 15:20:49 sorat-server sing-box[4030283]: ERROR[0856] [147417877 15.1s] connection: open connection to api.telegram.org:443 using outbound/vless[proxy]: read tcp 193.228.90.49:46184->185.143.233.238:80: i/o timeout
+Sep 07 15:21:05 sorat-server sing-box[4030283]: INFO[0872] [2704345085 0ms] inbound/mixed[mixed-in]: inbound connection from 193.228.90.49:58564
+Sep 07 15:21:05 sorat-server sing-box[4030283]: INFO[0872] [2704345085 1ms] inbound/mixed[mixed-in]: inbound connection to api.telegram.org:443
+Sep 07 15:21:05 sorat-server sing-box[4030283]: INFO[0872] [2704345085 1ms] outbound/vless[proxy]: outbound connection to api.telegram.org:443
+Sep 07 15:21:20 sorat-server sing-box[4030283]: ERROR[0887] [2704345085 15.0s] connection: open connection to api.telegram.org:443 using outbound/vless[proxy]: read tcp 193.228.90.49:34340->185.143.233.238:80: i/o timeout
+Sep 07 15:21:27 sorat-server sing-box[4030283]: INFO[0893] [2295516654 0ms] inbound/mixed[mixed-in]: inbound connection from 193.228.90.49:47892
+Sep 07 15:21:27 sorat-server sing-box[4030283]: INFO[0893] [2295516654 9ms] inbound/mixed[mixed-in]: inbound connection to api.telegram.org:443
+Sep 07 15:21:27 sorat-server sing-box[4030283]: INFO[0893] [2295516654 9ms] outbound/vless[proxy]: outbound connection to api.telegram.org:443
+Sep 07 15:21:42 sorat-server sing-box[4030283]: ERROR[0908] [2295516654 15.1s] connection: open connection to api.telegram.org:443 using outbound/vless[proxy]: unexpected HTTP response status: 504

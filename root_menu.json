@@ -14,6 +14,18 @@
       "text": "ربات‌های من",
       "children_type": "soft",
       "children": []
+    },
+    {
+      "id": "guide",
+      "icon": "📺",
+      "text": "راهنما",
+      "message": "مراحل ساخت ربات:\n\n۱- ورود به پنل: robatsaz.sorat.top\n۲- ایجاد ربات/فروشگاه\n\n🎥 <a href=\"https://youtu.be/HVtl45wI454?si=fDRklYxqWmEk6OiD\">مشاهده ویدیوی آموزش ساخت ربات در ۳۰ ثانیه</a>"
+    },
+    {
+      "id": "support",
+      "icon": "🎧",
+      "text": "پشتیبانی",
+      "message": "جهت ارتباط با پشتیبانی و اطلاع از آخرین بروزرسانی‌ها همراه ما باشید:\n\n👤 آیدی پشتیبانی: @sna1220\n📢 کانال تلگرام: @ForooshgahSaz_telegram"
     }
   ]
 }
