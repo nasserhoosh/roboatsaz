@@ -187,7 +187,7 @@ function installOutgoingMessageReporting(bot) {
 }
 
 // ==========================================
-// ۲. توابع کمکی نمایش منو (بدون تغییر نسبت به قبل)
+// ۲. توابع کمکی نمایش منو
 // ==========================================
 
 /**
@@ -230,10 +230,10 @@ async function showMenuLevel(ctx, menuIndex, parentId, promptText) {
     if (type === 'soft') {
         const text = buildSoftMenuText(promptText, nodes);
         const keyboard = buildSoftMenuKeyboard(menuIndex.backButtonText);
-        await ctx.reply(text, { reply_markup: keyboard });
+        await ctx.reply(text, { reply_markup: keyboard, parse_mode: 'HTML' });
     } else {
         const keyboard = buildKeyboard(nodes, true, menuIndex.backButtonText);
-        await ctx.reply(promptText, { reply_markup: keyboard });
+        await ctx.reply(promptText, { reply_markup: keyboard, parse_mode: 'HTML' });
     }
 }
 
@@ -271,8 +271,6 @@ async function startCreateBotFlow(ctx, chatId) {
     userState.startOnboarding(chatId);
     const keyboard = buildRequestContactKeyboard(REQUEST_CONTACT_BUTTON_TEXT, BACK_BUTTON_TEXT);
     console.log(`[onboarding] sending instruction photo to chatId=${chatId}`);
-    // نکته: این پکیج متد ctx.replyWithPhoto ندارد؛ ارسال عکس باید از طریق ctx.api.sendPhoto
-    // (یا bot.api.sendPhoto) با پارامترهای کامل (chat_id و ...) انجام شود، نه ctx.reply.
     await withTimeout(
         ctx.api.sendPhoto({
             chat_id: chatId,
@@ -318,9 +316,8 @@ async function handleCreateBotButton(ctx, chatId, fromId) {
 async function handleContactShared(ctx, chatId, fromId) {
     const contact = ctx.message.contact;
 
-    // نکته‌ی امنیتی: مطمئن شویم شماره‌ی خودِ کاربر است، نه یک مخاطب دیگر که فوروارد شده.
     if (!contact.user_id || String(contact.user_id) !== String(fromId)) {
-        await ctx.reply('⚠️ لطفاً فقط شماره تلفن خودتان را به اشتراک بگذارید.');
+        await ctx.reply('⚠️️ لطفاً فقط شماره تلفن خودتان را به اشتراک بگذارید.');
         return;
     }
 
@@ -353,7 +350,6 @@ async function handleConfirmation(ctx, chatId, fromId) {
     await profileRepository.saveFullName(fromId, fullName);
     const profile = await profileRepository.markProfileCompleted(fromId);
 
-    // هدیه‌ی خوش‌آمد یک‌بار برای کاربر تازه‌وارد (فقط همین‌جا، چون تکمیل پروفایل هم فقط یک‌بار رخ می‌دهد)
     const policy = loadPaymentPolicy();
     if (policy.welcome_gift_coins > 0) {
         await walletRepository.creditWallet(fromId, policy.welcome_gift_coins);
@@ -376,14 +372,11 @@ async function handleConfirmation(ctx, chatId, fromId) {
         process.exit(1);
     }
 
-    // نصب گزارش‌گیریِ پیام‌های خروجیِ ربات (ctx.reply / ctx.api.sendPhoto) قبل از هر هندلری،
-    // تا هیچ پیام خروجی‌ای از قلم نیفتد.
+    // نصب گزارش‌گیریِ پیام‌های خروجیِ ربات
     installOutgoingMessageReporting(bot);
 
     // ------------------------------------------
-    // میدل‌ور تشخیصی سراسری: هر آپدیت دریافتی را قبل از هر پردازشی لاگ می‌کند،
-    // تا مشخص شود آیا polling اصلاً پیام‌ها را دریافت می‌کند یا نه.
-    // همچنین همین‌جا پیام‌های ورودیِ کاربر به n8n گزارش می‌شوند (جامع، با تمام اطلاعات from/message).
+    // میدل‌ور تشخیصی سراسری
     // ------------------------------------------
     bot.use(async (ctx, next) => {
         console.log('[incoming update]', JSON.stringify({
@@ -398,8 +391,6 @@ async function handleConfirmation(ctx, chatId, fromId) {
             const chatId = ctx.chat.id;
             const fromId = ctx.from.id;
 
-            // به‌روزرسانی نگاشتِ chatId -> fromId/from، تا گزارش پیام‌های خروجیِ ربات هم بتواند
-            // فرستنده‌ی مکالمه را مشخص کند.
             lastFromIdByChat.set(String(chatId), fromId);
             lastFromInfoByChat.set(String(chatId), ctx.from);
 
@@ -410,8 +401,8 @@ async function handleConfirmation(ctx, chatId, fromId) {
                 messageId: ctx.message.message_id,
                 date: ctx.message.date,
                 chatType: ctx.chat.type,
-                from: ctx.from, // شیء کامل تلگرام: id, is_bot, first_name, last_name, username, language_code, ...
-                chat: ctx.chat, // شیء کامل چت
+                from: ctx.from,
+                chat: ctx.chat,
                 contact: ctx.message.contact || undefined,
                 entities: ctx.message.entities || undefined,
                 rawMessage: ctx.message,
@@ -427,7 +418,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
     });
 
     // ------------------------------------------
-    // /start : به‌روزرسانی اطلاعات تلگرامی + همیشه لیست منوهای کاربر
+    // دستور /start
     // ------------------------------------------
     bot.command('start', async (ctx) => {
         try {
@@ -442,31 +433,27 @@ async function handleConfirmation(ctx, chatId, fromId) {
 
     // ------------------------------------------
     // هندلر واحد پیام (contact + متن)
-    // نکته‌ی مهم: این پکیج زنجیره‌ای koa-style است - چند bot.on('message', ...) جدا
-    // اگر هیچ‌کدام صریحاً next() را صدا نزنند، فقط اولی اجرا می‌شود و بقیه هرگز
-    // فراخوانی نمی‌شوند. به همین دلیل منطق contact و متن هر دو در یک هندلر واحد آمده‌اند.
     // ------------------------------------------
     bot.on('message', async (ctx) => {
         try {
             const chatId = ctx.chat.id;
             const fromId = ctx.from.id;
 
-            // -------- شاخه‌ی contact --------
+            // شاخه‌ی contact
             if (ctx.message && ctx.message.contact) {
                 if (userState.isOnboarding(chatId) && userState.getOnboardingStep(chatId) === 'awaiting_contact') {
                     await handleContactShared(ctx, chatId, fromId);
                 }
-                // اگر contact خارج از این مرحله برسد، نادیده گرفته می‌شود.
                 return;
             }
 
-            // -------- شاخه‌ی متن --------
+            // شاخه‌ی متن
             const text = ctx.message && ctx.message.text;
-            if (!text) return; // سایر انواع پیام (عکس، استیکر و ...) نادیده گرفته می‌شوند
+            if (!text) return;
 
             console.log(`[text handler] chatId=${chatId} fromId=${fromId} text=${JSON.stringify(text)}`);
 
-            // -------- حالت صفر: کاربر در وسط فلوی onboarding است --------
+            // حالت صفر: فلوی onboarding
             if (userState.isOnboarding(chatId)) {
                 const step = userState.getOnboardingStep(chatId);
 
@@ -477,8 +464,6 @@ async function handleConfirmation(ctx, chatId, fromId) {
                 }
 
                 if (step === 'awaiting_contact') {
-                    // در این مرحله فقط دکمه‌ی اشتراک‌گذاری (که پیام contact می‌فرستد) یا بازگشت معتبر است؛
-                    // پیام متنی دیگری نادیده گرفته می‌شود.
                     return;
                 }
 
@@ -491,7 +476,6 @@ async function handleConfirmation(ctx, chatId, fromId) {
                     if (text === CONFIRM_BUTTON_TEXT) {
                         await handleConfirmation(ctx, chatId, fromId);
                     }
-                    // متن دیگری در این مرحله نادیده گرفته می‌شود.
                     return;
                 }
 
@@ -500,12 +484,12 @@ async function handleConfirmation(ctx, chatId, fromId) {
 
             const state = userState.getState(chatId);
 
-            // -------- حالت ۱: کاربر در منوی ریشه است (root_menu.json + سافت‌منوی «ربات‌های من») --------
+            // حالت ۱: منوی ریشه (root_menu.json + سافت‌‌منوی «ربات‌های من»)
             if (state.selectedMenuRowId === null) {
                 const rootMenuIndex = await buildFreshRootMenuIndex(fromId);
                 const currentParentId = userState.getCurrentParentId(chatId);
 
-                // دکمه بازگشت در سطوح داخلی منوی ریشه (مثلاً داخل سافت‌منوی «ربات‌های من»)
+                // دکمه بازگشت در منوی ریشه
                 if (text === rootMenuIndex.backButtonText && currentParentId !== null) {
                     const stillInside = userState.popLevel(chatId);
                     const parentId = stillInside ? userState.getCurrentParentId(chatId) : null;
@@ -527,7 +511,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
                     return;
                 }
 
-                if (!node) return; // متن نامرتبط در سطح ریشه؛ نادیده گرفته می‌شود
+                if (!node) return;
 
                 // دکمه‌ی ویژه: ایجاد ربات
                 if (node.id === CREATE_BOT_NODE_ID) {
@@ -535,7 +519,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
                     return;
                 }
 
-                // انتخاب یک ربات واقعی از سافت‌منوی «ربات‌های من»
+                // انتخاب ربات از سافت‌منوی «ربات‌های من»
                 if (node.id.startsWith(BOT_NODE_ID_PREFIX)) {
                     const botRowId = Number(node.id.slice(BOT_NODE_ID_PREFIX.length));
                     const menuIndex = await getMenuIndexById(botRowId, fromId);
@@ -548,10 +532,10 @@ async function handleConfirmation(ctx, chatId, fromId) {
                     return;
                 }
 
-                // دکمه‌ی معمولی دیگر از root_menu.json (مثلاً پرداخت/راهنما در آینده): فقط پیام دارد یا زیرمنوی استاتیک
+                // دکمه‌ی معمولی دیگر از root_menu.json (مثل راهنما و پشتیبانی)
                 const hasMessage = typeof node.message === 'string' && node.message.length > 0;
                 const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-                if (hasMessage) await ctx.reply(node.message);
+                if (hasMessage) await ctx.reply(node.message, { parse_mode: 'HTML' });
                 if (hasChildren) {
                     userState.pushLevel(chatId, node.id);
                     await showMenuLevel(ctx, rootMenuIndex, node.id, getDisplayText(node));
@@ -559,15 +543,14 @@ async function handleConfirmation(ctx, chatId, fromId) {
                 return;
             }
 
-            // -------- حالت ۲: کاربر داخل یک منوی مشخص (bot_menus) است --------
+            // حالت ۲: کاربر داخل یک منوی مشخص (bot_menus) است
             const menuIndex = await getMenuIndexById(state.selectedMenuRowId, fromId);
             if (!menuIndex) {
-                // منو دیگر در دسترس نیست (مثلاً حذف شده) -> بازگشت به منوی ریشه
                 await showRootMenu(ctx, chatId, fromId);
                 return;
             }
 
-            // دکمه بازگشت (در هر دو نوع سطح - دکمه‌ای یا سافت - همین یک متن است)
+            // دکمه بازگشت داخل ربات
             if (text === menuIndex.backButtonText) {
                 const stillInsideMenu = userState.popLevel(chatId);
                 if (!stillInsideMenu) {
@@ -582,7 +565,7 @@ async function handleConfirmation(ctx, chatId, fromId) {
                 return;
             }
 
-            // انتخاب آیتم داخل سطح فعلی (دکمه‌ای یا عددی، بسته به children_type)
+            // انتخاب آیتم داخل سطح منوی ربات
             const currentParentId = userState.getCurrentParentId(chatId);
             const { node, invalidSoftInput } = resolveSelectedNode(menuIndex, currentParentId, text);
 
@@ -597,7 +580,6 @@ async function handleConfirmation(ctx, chatId, fromId) {
             }
 
             if (!node) {
-                // متنی که با هیچ دکمه‌ای در سطح فعلی (دکمه‌ای) مطابقت ندارد؛ نادیده گرفته می‌شود
                 return;
             }
 
@@ -605,21 +587,20 @@ async function handleConfirmation(ctx, chatId, fromId) {
             const hasChildren = Array.isArray(node.children) && node.children.length > 0;
 
             if (hasMessage) {
-                await ctx.reply(node.message);
+                await ctx.reply(node.message, { parse_mode: 'HTML' });
             }
 
             if (hasChildren) {
                 userState.pushLevel(chatId, node.id);
                 await showMenuLevel(ctx, menuIndex, node.id, getDisplayText(node));
             }
-            // اگر نه message دارد و نه children: آیتم بی‌اثر (هشدار در menuLoader هنگام بارگذاری چاپ شده)
         } catch (err) {
             await reportError(ctx, 'message handler', err);
         }
     });
 
     // ------------------------------------------
-    // مدیریت خطاهای زمان اجرا (آخرین خط دفاعی - خطاهایی که در try/catch های بالا گرفته نشده باشند)
+    // مدیریت خطاهای زمان اجرا
     // ------------------------------------------
     bot.catch((err) => {
         console.error('Bot Runtime Error (uncaught):', err);
